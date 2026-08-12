@@ -20,15 +20,13 @@ export function ApproxMap({
   exact?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  // Derived, not set in an effect: without a key the map can never load.
-  // "no-key" and "failed" are distinct: one is unconfigured, one is broken.
-  const [status, setStatus] = useState<
-    "loading" | "ready" | "no-key" | "failed"
-  >(apiKey ? "loading" : "no-key");
+  // Required, so an empty key is just another way for the loader to fail.
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+  const [status, setStatus] = useState<"loading" | "ready" | "failed">(
+    "loading",
+  );
 
   useEffect(() => {
-    if (!apiKey) return;
     let cancelled = false;
 
     loadMapClasses(apiKey)
@@ -86,7 +84,7 @@ export function ApproxMap({
     };
   }, [apiKey, lat, lng, exact]);
 
-  if (status === "no-key" || status === "failed") {
+  if (status === "failed") {
     return (
       <div className="flex h-56 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong bg-surface-muted px-6 text-center">
         <svg
@@ -98,14 +96,11 @@ export function ApproxMap({
           <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z" />
         </svg>
         <p className="text-[13px] font-medium text-ink-soft">
-          {status === "no-key"
-            ? "Map needs a Maps API key"
-            : "Map could not be loaded"}
+          Map could not be loaded
         </p>
         <p className="text-xs text-ink-faint">
-          {status === "no-key"
-            ? "Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to render the pin."
-            : "Check that the Maps JavaScript API is enabled and the key allows this referrer."}{" "}
+          Check that NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is set, the Maps JavaScript
+          API is enabled, and the key allows this referrer.{" "}
           {exact ? "Exact" : "Approximate"} location: {lat.toFixed(4)},{" "}
           {lng.toFixed(4)}
         </p>

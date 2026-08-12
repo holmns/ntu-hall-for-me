@@ -50,39 +50,3 @@ export function GoogleSignInButton({ callbackUrl }: { callbackUrl: string }) {
     </form>
   );
 }
-
-export function DemoSignInButton({
-  email,
-  label,
-  hint,
-  callbackUrl,
-}: {
-  email: string;
-  label: string;
-  hint: string;
-  callbackUrl: string;
-}) {
-  return (
-    <form
-      action={async () => {
-        "use server";
-        await signIn("demo", { email, redirectTo: callbackUrl });
-      }}
-    >
-      <button
-        type="submit"
-        className="flex w-full items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-left transition-colors hover:border-line-strong hover:bg-surface-muted"
-      >
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-soft text-sm font-semibold text-brand">
-          {label.charAt(0)}
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-medium text-ink">
-            {label}
-          </span>
-          <span className="block truncate text-xs text-ink-faint">{hint}</span>
-        </span>
-      </button>
-    </form>
-  );
-}

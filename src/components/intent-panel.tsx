@@ -7,17 +7,12 @@ const MODE_LABEL = {
   driving: "driving",
 } as const;
 
-/**
- * Shows the seeker what the model understood. Doubles as the demo's proof that
- * the natural-language step is real rather than keyword matching.
- */
+/** Shows the seeker what the model understood before it ranked anything. */
 export function IntentPanel({
   intent,
-  rankedBy,
   count,
 }: {
   intent: SeekerIntent;
-  rankedBy: "llm" | "heuristic";
   count: number;
 }) {
   const chips: string[] = [];
@@ -38,22 +33,12 @@ export function IntentPanel({
     chips.push(`Prefers ${MODE_LABEL[intent.travelMode]}`);
   }
 
-  const isFallback = intent.source === "heuristic" || rankedBy === "heuristic";
-
   return (
     <div className="card overflow-hidden">
       <div className="flex items-center justify-between gap-3 border-b border-line bg-surface-muted/60 px-4 py-2.5">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
           What we understood
         </span>
-        {isFallback && (
-          <span
-            className="rounded-full border border-line bg-surface px-2 py-0.5 text-[11px] text-ink-faint"
-            title="OPENROUTER_API_KEY is not set, so keyword matching was used instead of the LLM."
-          >
-            keyword fallback
-          </span>
-        )}
       </div>
 
       <div className="px-4 py-3.5">
@@ -90,7 +75,7 @@ export function IntentPanel({
           </div>
         )}
 
-        {intent.nuance && intent.source === "llm" && (
+        {intent.nuance && (
           <p className="mt-3 text-[13px] text-ink-soft">
             <span className="text-ink-faint">Also weighing:</span>{" "}
             {intent.nuance}
@@ -99,7 +84,7 @@ export function IntentPanel({
 
         <p className="mt-3 border-t border-line pt-3 text-[12px] text-ink-faint">
           {count} {count === 1 ? "room passed" : "rooms passed"} the hard
-          filters and {rankedBy === "llm" ? "were ranked by the model" : "were scored by keyword match"}.
+          filters and {count === 1 ? "was" : "were"} ranked by the model.
         </p>
       </div>
     </div>

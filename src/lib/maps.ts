@@ -4,10 +4,13 @@
  * component. GOOGLE_MAPS_API_KEY has no NEXT_PUBLIC_ prefix, so Next.js will
  * not inline it into a browser bundle. (No `server-only` import here because
  * the seed script runs this module outside the Next.js bundler.)
+ *
+ * GOOGLE_MAPS_API_KEY is required. There is no offline address book and no
+ * straight-line commute estimate behind these calls: a listing is only created
+ * with real Places and Distance Matrix data, or not at all.
  */
 import type { ListingCategory } from "@/generated/prisma/enums";
 import { NTU_CAMPUS, SEARCH_BIAS_RADIUS_M } from "./constants";
-import { NTU_AREA_PLACES } from "./ntu-area-places";
 
 export type LatLng = { lat: number; lng: number };
 
@@ -29,14 +32,20 @@ export type Commute = {
   walkingMin: number;
   transitMin: number;
   drivingMin: number;
-  /** True when values came from the Distance Matrix API rather than the offline estimate. */
-  fromApi: boolean;
 };
 
-const MAPS_KEY = process.env.GOOGLE_MAPS_API_KEY?.trim();
-
-export function hasMapsKey(): boolean {
-  return Boolean(MAPS_KEY);
+/**
+ * Read per call rather than at module load: the seed script loads .env after
+ * importing this module, and a stale undefined would be baked in.
+ */
+function mapsKey(): string {
+  const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
+  if (!key) {
+    throw new Error(
+      "GOOGLE_MAPS_API_KEY is not set. Address lookup and the commute to campus require it - see .env.example.",
+    );
+  }
+  return key;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,130 +98,87 @@ export function approximateLocation(point: LatLng, seed: string): LatLng {
 
 /**
  * Autocomplete runs server-side (Places API New) so the Maps key is never
- * shipped to the browser and we control the dropdown markup. Without a key it
- * falls back to a small local dataset of NTU-area addresses, which keeps the
- * whole provider flow demoable offline.
+ * shipped to the browser and we control the dropdown markup. Throws if the key
+ * is missing or the API errors, rather than serving a canned address list.
  */
 export async function autocompletePlaces(
   input: string,
   sessionToken?: string,
-): Promise<{ suggestions: PlaceSuggestion[]; fromApi: boolean }> {
+): Promise<PlaceSuggestion[]> {
   const query = input.trim();
-  if (query.length < 2) return { suggestions: [], fromApi: false };
+  if (query.length < 2) return [];
 
-  if (!MAPS_KEY) return { suggestions: localSuggest(query), fromApi: false };
-
-  try {
-    const res = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": MAPS_KEY,
-      },
-      body: JSON.stringify({
-        input: query,
-        includedRegionCodes: ["sg"],
-        locationBias: {
-          circle: {
-            center: {
-              latitude: NTU_CAMPUS.lat,
-              longitude: NTU_CAMPUS.lng,
-            },
-            radius: SEARCH_BIAS_RADIUS_M,
+  const res = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": mapsKey(),
+    },
+    body: JSON.stringify({
+      input: query,
+      includedRegionCodes: ["sg"],
+      locationBias: {
+        circle: {
+          center: {
+            latitude: NTU_CAMPUS.lat,
+            longitude: NTU_CAMPUS.lng,
           },
+          radius: SEARCH_BIAS_RADIUS_M,
         },
-        ...(sessionToken ? { sessionToken } : {}),
-      }),
-    });
+      },
+      ...(sessionToken ? { sessionToken } : {}),
+    }),
+  });
 
-    if (!res.ok) throw new Error(`Places autocomplete failed: ${res.status}`);
-    const data = (await res.json()) as {
-      suggestions?: {
-        placePrediction?: {
-          placeId: string;
-          structuredFormat?: {
-            mainText?: { text?: string };
-            secondaryText?: { text?: string };
-          };
-          text?: { text?: string };
+  if (!res.ok) throw new Error(`Places autocomplete failed: ${res.status}`);
+  const data = (await res.json()) as {
+    suggestions?: {
+      placePrediction?: {
+        placeId: string;
+        structuredFormat?: {
+          mainText?: { text?: string };
+          secondaryText?: { text?: string };
         };
-      }[];
-    };
+        text?: { text?: string };
+      };
+    }[];
+  };
 
-    const suggestions = (data.suggestions ?? [])
-      .map((s) => s.placePrediction)
-      .filter((p): p is NonNullable<typeof p> => Boolean(p?.placeId))
-      .map((p) => ({
-        placeId: p.placeId,
-        primary: p.structuredFormat?.mainText?.text ?? p.text?.text ?? "",
-        secondary: p.structuredFormat?.secondaryText?.text ?? "",
-      }));
-
-    return { suggestions, fromApi: true };
-  } catch (error) {
-    console.error("[maps] autocomplete fell back to local data:", error);
-    return { suggestions: localSuggest(query), fromApi: false };
-  }
+  return (data.suggestions ?? [])
+    .map((s) => s.placePrediction)
+    .filter((p): p is NonNullable<typeof p> => Boolean(p?.placeId))
+    .map((p) => ({
+      placeId: p.placeId,
+      primary: p.structuredFormat?.mainText?.text ?? p.text?.text ?? "",
+      secondary: p.structuredFormat?.secondaryText?.text ?? "",
+    }));
 }
 
+/** Null only when Places has no location for the id. Throws on API failure. */
 export async function getPlaceDetail(
   placeId: string,
   sessionToken?: string,
 ): Promise<PlaceDetail | null> {
-  if (placeId.startsWith("local:")) return localDetail(placeId);
-  if (!MAPS_KEY) return null;
-
-  try {
-    const url = new URL(`https://places.googleapis.com/v1/places/${placeId}`);
-    if (sessionToken) url.searchParams.set("sessionToken", sessionToken);
-    const res = await fetch(url, {
-      headers: {
-        "X-Goog-Api-Key": MAPS_KEY,
-        "X-Goog-FieldMask": "id,formattedAddress,location",
-      },
-    });
-    if (!res.ok) throw new Error(`Place details failed: ${res.status}`);
-    const data = (await res.json()) as {
-      id: string;
-      formattedAddress?: string;
-      location?: { latitude: number; longitude: number };
-    };
-    if (!data.location) return null;
-    return {
-      placeId: data.id,
-      address: data.formattedAddress ?? "",
-      lat: data.location.latitude,
-      lng: data.location.longitude,
-    };
-  } catch (error) {
-    console.error("[maps] place details failed:", error);
-    return null;
-  }
-}
-
-function localSuggest(query: string): PlaceSuggestion[] {
-  const q = query.toLowerCase();
-  return NTU_AREA_PLACES.filter(
-    (p) =>
-      p.address.toLowerCase().includes(q) || p.area.toLowerCase().includes(q),
-  )
-    .slice(0, 6)
-    .map((p) => ({
-      placeId: `local:${p.id}`,
-      primary: p.address.split(",")[0],
-      secondary: p.address.split(",").slice(1).join(",").trim() || p.area,
-    }));
-}
-
-function localDetail(placeId: string): PlaceDetail | null {
-  const id = placeId.replace("local:", "");
-  const place = NTU_AREA_PLACES.find((p) => p.id === id);
-  if (!place) return null;
+  const url = new URL(`https://places.googleapis.com/v1/places/${placeId}`);
+  if (sessionToken) url.searchParams.set("sessionToken", sessionToken);
+  const res = await fetch(url, {
+    headers: {
+      "X-Goog-Api-Key": mapsKey(),
+      "X-Goog-FieldMask": "id,formattedAddress,location",
+    },
+  });
+  if (!res.ok) throw new Error(`Place details failed: ${res.status}`);
+  const data = (await res.json()) as {
+    id: string;
+    formattedAddress?: string;
+    location?: { latitude: number; longitude: number };
+  };
+  if (!data.location) return null;
   return {
-    placeId,
-    address: place.address,
-    lat: place.lat,
-    lng: place.lng,
+    placeId: data.id,
+    address: data.formattedAddress ?? "",
+    lat: data.location.latitude,
+    lng: data.location.longitude,
   };
 }
 
@@ -226,6 +192,10 @@ function localDetail(placeId: string): PlaceDetail | null {
  *
  * On-campus listings are already on campus: they get zeroed commute values and
  * are excluded from distance-based ranking so they cannot auto-dominate.
+ *
+ * Every mode must resolve. A partial result would be written to the row and
+ * shown to seekers as fact, and 0 already means "on campus", so a failed mode
+ * fails the whole call instead.
  */
 export async function computeCommute(
   point: LatLng,
@@ -237,34 +207,29 @@ export async function computeCommute(
       walkingMin: 0,
       transitMin: 0,
       drivingMin: 0,
-      fromApi: false,
     };
   }
 
-  const straightLine = haversineMeters(point, NTU_CAMPUS);
+  const modes = ["walking", "transit", "driving"] as const;
+  const [walking, transit, driving] = await Promise.all(
+    modes.map((mode) => distanceMatrix(point, mode)),
+  );
 
-  if (!MAPS_KEY) return estimateCommute(straightLine);
-
-  try {
-    const modes = ["walking", "transit", "driving"] as const;
-    const results = await Promise.all(
-      modes.map((mode) => distanceMatrix(point, mode)),
+  if (!walking || !transit || !driving) {
+    const missing = modes.filter(
+      (_, i) => ![walking, transit, driving][i],
     );
-    const [walking, transit, driving] = results;
-    if (!walking && !transit && !driving) return estimateCommute(straightLine);
-
-    const fallback = estimateCommute(straightLine);
-    return {
-      distanceMeters: driving?.distanceMeters ?? walking?.distanceMeters ?? fallback.distanceMeters,
-      walkingMin: walking?.minutes ?? fallback.walkingMin,
-      transitMin: transit?.minutes ?? fallback.transitMin,
-      drivingMin: driving?.minutes ?? fallback.drivingMin,
-      fromApi: true,
-    };
-  } catch (error) {
-    console.error("[maps] distance matrix fell back to estimate:", error);
-    return estimateCommute(straightLine);
+    throw new Error(
+      `Distance Matrix returned no route to campus for: ${missing.join(", ")}`,
+    );
   }
+
+  return {
+    distanceMeters: driving.distanceMeters || walking.distanceMeters,
+    walkingMin: walking.minutes,
+    transitMin: transit.minutes,
+    drivingMin: driving.minutes,
+  };
 }
 
 async function distanceMatrix(
@@ -279,7 +244,7 @@ async function distanceMatrix(
   );
   url.searchParams.set("mode", mode);
   url.searchParams.set("region", "sg");
-  url.searchParams.set("key", MAPS_KEY!);
+  url.searchParams.set("key", mapsKey());
 
   const res = await fetch(url);
   if (!res.ok) return null;
@@ -297,23 +262,5 @@ async function distanceMatrix(
   return {
     minutes: Math.max(1, Math.round(element.duration.value / 60)),
     distanceMeters: element.distance?.value ?? 0,
-  };
-}
-
-/**
- * Offline estimate used when GOOGLE_MAPS_API_KEY is absent or the API errors.
- * Road distance is roughly 1.3x straight-line in this part of Singapore.
- */
-export function estimateCommute(straightLineMeters: number): Commute {
-  const roadMeters = Math.round(straightLineMeters * 1.3);
-  const walkingMin = Math.max(1, Math.round(roadMeters / 80)); // ~4.8 km/h
-  const drivingMin = Math.max(3, Math.round(roadMeters / 650) + 4); // ~39 km/h + parking
-  const transitMin = Math.max(5, Math.round(roadMeters / 320) + 7); // bus ~19 km/h + wait
-  return {
-    distanceMeters: roadMeters,
-    walkingMin,
-    transitMin,
-    drivingMin,
-    fromApi: false,
   };
 }

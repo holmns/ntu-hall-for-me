@@ -4,6 +4,9 @@
  * Both LLM calls in the matching pipeline go through `chatJson`, which asks for
  * a JSON object back and parses it defensively - a hackathon-grade guard
  * against models that wrap JSON in prose or code fences.
+ *
+ * OPENROUTER_API_KEY is required. There is no keyword fallback: a missing key
+ * or a failed call surfaces as an error rather than quietly degrading search.
  */
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 
@@ -28,11 +31,17 @@ function completionsUrl(): string {
   return `${base.replace(/\/$/, "")}/chat/completions`;
 }
 
-export function hasOpenRouterKey(): boolean {
-  return Boolean(process.env.OPENROUTER_API_KEY?.trim());
-}
-
 export class OpenRouterError extends Error {}
+
+function requireApiKey(): string {
+  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (!apiKey) {
+    throw new OpenRouterError(
+      "OPENROUTER_API_KEY is not set. Search needs it to read the query and rank rooms - see .env.example.",
+    );
+  }
+  return apiKey;
+}
 
 export async function chatJson<T>({
   system,
@@ -45,8 +54,7 @@ export async function chatJson<T>({
   maxTokens?: number;
   timeoutMs?: number;
 }): Promise<T> {
-  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
-  if (!apiKey) throw new OpenRouterError("OPENROUTER_API_KEY is not set");
+  const apiKey = requireApiKey();
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

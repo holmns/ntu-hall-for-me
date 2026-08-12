@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { prisma } from "./prisma";
-import { chatJson, hasOpenRouterKey } from "./openrouter";
+import { chatJson } from "./openrouter";
 import { ALL_TAGS, TAG_LABELS } from "./constants";
 import { LISTING_IMAGE_SELECT, type ListingImageView } from "./images";
 import type {
@@ -27,7 +27,6 @@ export type SeekerIntent = {
   nuance: string;
   /** One-line restatement shown back to the seeker. */
   summary: string;
-  source: "llm" | "heuristic";
 };
 
 /** Hard constraints set explicitly via filter chips. These beat the LLM. */
@@ -55,7 +54,6 @@ export type SearchResult = {
   results: RankedListing[];
   /** Human-readable notes about constraints we had to relax to find anything. */
   relaxations: string[];
-  rankedBy: "llm" | "heuristic";
 };
 
 const MAX_CANDIDATES = 25;
@@ -109,53 +107,65 @@ Rules:
 - Never invent a budget the seeker did not state.`;
 }
 
+/**
+ * Neutral intent for browsing with an empty search bar. Nothing to parse, so
+ * this is the one path into the pipeline that does not call the model.
+ */
+function browseAllIntent(): SeekerIntent {
+  return {
+    minPrice: null,
+    maxPrice: null,
+    mustHaveTags: [],
+    niceToHaveTags: [],
+    category: null,
+    roomType: null,
+    travelMode: null,
+    maxCommuteMin: null,
+    nuance: "",
+    summary: "All available rooms",
+  };
+}
+
+/** Throws if OpenRouter is unreachable - the caller renders an error state. */
 export async function parseSeekerQuery(query: string): Promise<SeekerIntent> {
   const trimmed = query.trim();
-  if (!trimmed) return heuristicIntent("");
+  if (!trimmed) return browseAllIntent();
 
-  if (!hasOpenRouterKey()) return heuristicIntent(trimmed);
+  const raw = await chatJson<unknown>({
+    system: buildParseSystemPrompt(),
+    user: trimmed,
+    maxTokens: 600,
+  });
+  const parsed = intentSchema.parse(raw);
+  const validTags = new Set<string>(ALL_TAGS);
+  const clean = (tags?: string[]) =>
+    (tags ?? [])
+      .map((t) => t.toUpperCase().trim())
+      .filter((t): t is ListingTag => validTags.has(t));
 
-  try {
-    const raw = await chatJson<unknown>({
-      system: buildParseSystemPrompt(),
-      user: trimmed,
-      maxTokens: 600,
-    });
-    const parsed = intentSchema.parse(raw);
-    const validTags = new Set<string>(ALL_TAGS);
-    const clean = (tags?: string[]) =>
-      (tags ?? [])
-        .map((t) => t.toUpperCase().trim())
-        .filter((t): t is ListingTag => validTags.has(t));
+  const mustHaveTags = clean(parsed.mustHaveTags);
+  const niceToHaveTags = clean(parsed.niceToHaveTags).filter(
+    (t) => !mustHaveTags.includes(t),
+  );
 
-    const mustHaveTags = clean(parsed.mustHaveTags);
-    const niceToHaveTags = clean(parsed.niceToHaveTags).filter(
-      (t) => !mustHaveTags.includes(t),
-    );
-
-    return groundIntent(
-      {
-        minPrice: normalisePrice(parsed.minPrice),
-        maxPrice: normalisePrice(parsed.maxPrice),
-        mustHaveTags,
-        niceToHaveTags,
-        category: parsed.category ?? null,
-        roomType: parsed.roomType ?? null,
-        travelMode: parsed.travelMode ?? null,
-        maxCommuteMin:
-          typeof parsed.maxCommuteMin === "number" && parsed.maxCommuteMin > 0
-            ? Math.round(parsed.maxCommuteMin)
-            : null,
-        nuance: parsed.nuance?.trim() ?? "",
-        summary: parsed.summary?.trim() || trimmed,
-        source: "llm",
-      },
-      trimmed,
-    );
-  } catch (error) {
-    console.error("[matching] query parse failed, using heuristics:", error);
-    return heuristicIntent(trimmed);
-  }
+  return groundIntent(
+    {
+      minPrice: normalisePrice(parsed.minPrice),
+      maxPrice: normalisePrice(parsed.maxPrice),
+      mustHaveTags,
+      niceToHaveTags,
+      category: parsed.category ?? null,
+      roomType: parsed.roomType ?? null,
+      travelMode: parsed.travelMode ?? null,
+      maxCommuteMin:
+        typeof parsed.maxCommuteMin === "number" && parsed.maxCommuteMin > 0
+          ? Math.round(parsed.maxCommuteMin)
+          : null,
+      nuance: parsed.nuance?.trim() ?? "",
+      summary: parsed.summary?.trim() || trimmed,
+    },
+    trimmed,
+  );
 }
 
 /**
@@ -194,86 +204,6 @@ function normalisePrice(value: number | null | undefined): number | null {
     return null;
   }
   return Math.round(value);
-}
-
-/**
- * Keyword fallback so search still works with no OPENROUTER_API_KEY.
- * Deliberately simple: budget, a few tag keywords, room type, category.
- */
-export function heuristicIntent(query: string): SeekerIntent {
-  const q = query.toLowerCase();
-
-  let maxPrice: number | null = null;
-  let minPrice: number | null = null;
-
-  const under = q.match(/(?:under|below|less than|max|budget of|up to|<)\s*\$?\s*(\d{3,4})/);
-  if (under) maxPrice = Number(under[1]);
-  const over = q.match(/(?:over|above|at least|more than|min|>)\s*\$?\s*(\d{3,4})/);
-  if (over) minPrice = Number(over[1]);
-  const between = q.match(/\$?\s*(\d{3,4})\s*(?:-|to|and)\s*\$?\s*(\d{3,4})/);
-  if (between) {
-    minPrice = Number(between[1]);
-    maxPrice = Number(between[2]);
-  }
-  if (!maxPrice && !minPrice && !between) {
-    const bare = q.match(/\$\s*(\d{3,4})/);
-    if (bare) maxPrice = Number(bare[1]);
-  }
-
-  const keywordTags: [RegExp, ListingTag][] = [
-    [/aircon|air-con|air con|ac\b/, "AIRCON"],
-    [/ensuite|en-suite|own bathroom|attached bath|private bath/, "ENSUITE"],
-    [/furnish/, "FURNISHED"],
-    [/wifi|wi-fi|internet/, "WIFI_INCLUDED"],
-    [/utilit|bills include/, "UTILITIES_INCLUDED"],
-    [/pet|dog|cat/, "PET_FRIENDLY"],
-    [/cook|kitchen/, "COOKING_ALLOWED"],
-    [/washing machine|laundry/, "WASHING_MACHINE"],
-    [/desk|study/, "STUDY_DESK"],
-    [/mrt|train station/, "NEAR_MRT"],
-    [/quiet|peaceful|silent/, "QUIET"],
-    [/no agent|without agent/, "NO_AGENT_FEE"],
-    [/short lease|one semester|1 semester|few months|sublet/, "SHORT_LEASE"],
-    [/long lease|whole year|1 year|full year/, "LONG_LEASE"],
-    [/female only|girls only/, "FEMALE_ONLY"],
-    [/male only|guys only/, "MALE_ONLY"],
-  ];
-  const niceToHaveTags = keywordTags
-    .filter(([re]) => re.test(q))
-    .map(([, tag]) => tag);
-
-  let roomType: RoomType | null = null;
-  if (/whole unit|entire (?:unit|flat|apartment)|whole (?:flat|apartment)/.test(q)) {
-    roomType = "WHOLE_UNIT";
-  } else if (/\bsingle room\b|\bown room\b/.test(q)) {
-    roomType = "SINGLE";
-  }
-
-  let category: ListingCategory | null = null;
-  if (/on[- ]?campus|hall\b|halls\b|dorm/.test(q)) category = "ON_CAMPUS";
-  else if (/off[- ]?campus/.test(q)) category = "OFF_CAMPUS";
-
-  let travelMode: TravelMode | null = null;
-  if (/walk/.test(q)) travelMode = "walking";
-  else if (/bus|mrt|transit|public transport/.test(q)) travelMode = "transit";
-  else if (/driv|car\b/.test(q)) travelMode = "driving";
-
-  const commute = q.match(/(\d{1,2})\s*(?:min|minute)/);
-  const maxCommuteMin = commute ? Number(commute[1]) : null;
-
-  return {
-    minPrice,
-    maxPrice,
-    mustHaveTags: [],
-    niceToHaveTags,
-    category,
-    roomType,
-    travelMode,
-    maxCommuteMin,
-    nuance: query,
-    summary: query || "All available rooms",
-    source: "heuristic",
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -450,155 +380,68 @@ function candidatePayload(
   }));
 }
 
+/** Throws if OpenRouter is unreachable - the caller renders an error state. */
 export async function rankListings(
   intent: SeekerIntent,
   listings: ListingWithProvider[],
   originalQuery: string,
-): Promise<{ ranked: RankedListing[]; rankedBy: "llm" | "heuristic" }> {
-  if (listings.length === 0) return { ranked: [], rankedBy: "heuristic" };
+): Promise<RankedListing[]> {
+  if (listings.length === 0) return [];
 
   // Browsing with an empty search bar: there is nothing to rank against, and
   // the results page hides reasons and rank numbers without a query. Ranking
   // here would spend an LLM call and its latency on output that is discarded,
   // so keep the query order (newest first) instead.
   if (!originalQuery.trim() && !intent.nuance.trim()) {
-    return {
-      ranked: listings.map((listing) => ({ listing, score: 0, reason: "" })),
-      rankedBy: "heuristic",
-    };
+    return listings.map((listing) => ({ listing, score: 0, reason: "" }));
   }
 
   const candidates = listings.slice(0, MAX_CANDIDATES);
   const overflow = listings.slice(MAX_CANDIDATES);
 
-  if (!hasOpenRouterKey()) {
-    return { ranked: heuristicRank(intent, listings), rankedBy: "heuristic" };
-  }
+  const raw = await chatJson<unknown>({
+    system: RANK_SYSTEM_PROMPT,
+    user: JSON.stringify({
+      seekerQuery: originalQuery,
+      seekerNuance: intent.nuance,
+      budget: { min: intent.minPrice, max: intent.maxPrice },
+      preferredTravelMode: intent.travelMode ?? "transit",
+      niceToHave: intent.niceToHaveTags,
+      candidates: candidatePayload(candidates, intent),
+    }),
+    maxTokens: 2000,
+  });
 
-  try {
-    const raw = await chatJson<unknown>({
-      system: RANK_SYSTEM_PROMPT,
-      user: JSON.stringify({
-        seekerQuery: originalQuery,
-        seekerNuance: intent.nuance,
-        budget: { min: intent.minPrice, max: intent.maxPrice },
-        preferredTravelMode: intent.travelMode ?? "transit",
-        niceToHave: intent.niceToHaveTags,
-        candidates: candidatePayload(candidates, intent),
-      }),
-      maxTokens: 2000,
+  const parsed = rankingSchema.parse(raw);
+  const byId = new Map(candidates.map((l) => [l.id, l]));
+  const ranked: RankedListing[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of parsed.ranking) {
+    const listing = byId.get(entry.id);
+    if (!listing || seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    ranked.push({
+      listing,
+      score: clampScore(entry.score),
+      reason: entry.reason.trim(),
     });
-
-    const parsed = rankingSchema.parse(raw);
-    const byId = new Map(candidates.map((l) => [l.id, l]));
-    const ranked: RankedListing[] = [];
-    const seen = new Set<string>();
-
-    for (const entry of parsed.ranking) {
-      const listing = byId.get(entry.id);
-      if (!listing || seen.has(entry.id)) continue;
-      seen.add(entry.id);
-      ranked.push({
-        listing,
-        score: clampScore(entry.score),
-        reason: entry.reason.trim(),
-      });
-    }
-
-    // Anything the model dropped still deserves to appear, just lower down.
-    const missing = [...candidates.filter((l) => !seen.has(l.id)), ...overflow];
-    ranked.push(...heuristicRank(intent, missing));
-
-    if (ranked.length === 0) {
-      return { ranked: heuristicRank(intent, listings), rankedBy: "heuristic" };
-    }
-    return { ranked, rankedBy: "llm" };
-  } catch (error) {
-    console.error("[matching] ranking failed, using heuristics:", error);
-    return { ranked: heuristicRank(intent, listings), rankedBy: "heuristic" };
   }
+
+  // Listings the model dropped, plus everything past MAX_CANDIDATES that was
+  // never sent to it, still deserve to appear - just below the ranked ones and
+  // without an invented reason. They keep their query order (newest first).
+  const unranked = [...candidates.filter((l) => !seen.has(l.id)), ...overflow];
+  ranked.push(
+    ...unranked.map((listing) => ({ listing, score: 0, reason: "" })),
+  );
+
+  return ranked;
 }
 
 function clampScore(score: number): number {
   if (!Number.isFinite(score)) return 50;
   return Math.max(0, Math.min(100, Math.round(score)));
-}
-
-/**
- * Deterministic scoring used when OpenRouter is unavailable, and to backfill
- * listings the model omitted. Also produces a plain-English reason so the UI
- * looks identical either way.
- */
-export function heuristicRank(
-  intent: SeekerIntent,
-  listings: ListingWithProvider[],
-): RankedListing[] {
-  const mode = intent.travelMode ?? "transit";
-  const nuanceWords = intent.nuance
-    .toLowerCase()
-    .split(/[^a-z]+/)
-    .filter((w) => w.length > 3);
-
-  return listings
-    .map((listing) => {
-      let score = 50;
-      const reasons: string[] = [];
-
-      // Budget fit
-      if (intent.maxPrice != null) {
-        if (listing.price <= intent.maxPrice) {
-          const headroom = (intent.maxPrice - listing.price) / intent.maxPrice;
-          score += 15 + Math.round(headroom * 10);
-          reasons.push(`$${listing.price} is within your $${intent.maxPrice} budget`);
-        } else {
-          score -= 20;
-          reasons.push(`$${listing.price} is over your budget`);
-        }
-      } else {
-        reasons.push(`$${listing.price}/month`);
-      }
-
-      // Tag overlap
-      const wanted = [...intent.mustHaveTags, ...intent.niceToHaveTags];
-      const matchedTags = wanted.filter((t) =>
-        (listing.tags as ListingTag[]).includes(t),
-      );
-      score += matchedTags.length * 6;
-      if (matchedTags.length > 0) {
-        reasons.push(
-          matchedTags
-            .slice(0, 2)
-            .map((t) => TAG_LABELS[t].toLowerCase())
-            .join(" and "),
-        );
-      }
-
-      // Commute. On-campus listings are excluded from distance scoring so they
-      // do not automatically dominate; they get a neutral contribution.
-      if (listing.category === "ON_CAMPUS") {
-        reasons.push("on-campus sublet");
-      } else {
-        const minutes = commuteMinutes(listing, mode);
-        score += Math.max(-15, 15 - Math.round(minutes / 3));
-        reasons.push(`${minutes} min to campus by ${mode}`);
-      }
-
-      // Nuance keyword hits in the description
-      const haystack = `${listing.title} ${listing.description}`.toLowerCase();
-      const hits = nuanceWords.filter((w) => haystack.includes(w));
-      score += Math.min(12, hits.length * 4);
-
-      return {
-        listing,
-        score: clampScore(score),
-        reason: capitalise(reasons.slice(0, 3).join(", ")),
-      };
-    })
-    .sort((a, b) => b.score - a.score);
-}
-
-function capitalise(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -611,6 +454,6 @@ export async function searchListings(
 ): Promise<SearchResult> {
   const intent = await parseSeekerQuery(query);
   const { listings, relaxations } = await hardFilter(intent, chips);
-  const { ranked, rankedBy } = await rankListings(intent, listings, query);
-  return { intent, results: ranked, relaxations, rankedBy };
+  const results = await rankListings(intent, listings, query);
+  return { intent, results, relaxations };
 }

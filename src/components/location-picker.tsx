@@ -36,15 +36,16 @@ export function LocationPicker({
     onChangeRef.current = onChange;
   }, [onChange]);
 
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  const [status, setStatus] = useState<"loading" | "ready" | "no-key" | "failed">(
-    apiKey ? "loading" : "no-key",
+  // Required, so an empty key is just another way for the loader to fail.
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+  const [status, setStatus] = useState<"loading" | "ready" | "failed">(
+    "loading",
   );
   const [moved, setMoved] = useState(false);
 
   // Build the map once, then drive it imperatively via the value effect below.
   useEffect(() => {
-    if (!apiKey || !ref.current) return;
+    if (!ref.current) return;
     let cancelled = false;
 
     loadMapClasses(apiKey)
@@ -117,13 +118,11 @@ export function LocationPicker({
     setMoved(false);
   }, [value]);
 
-  if (status === "no-key" || status === "failed") {
+  if (status === "failed") {
     return (
       <div className="rounded-xl border border-dashed border-line-strong bg-surface-muted px-4 py-5 text-center">
         <p className="text-[13px] font-medium text-ink-soft">
-          {status === "no-key"
-            ? "Map picker needs a Maps API key"
-            : "Map picker could not be loaded"}
+          Map picker could not be loaded
         </p>
         <p className="mt-1 text-xs text-ink-faint">
           {value

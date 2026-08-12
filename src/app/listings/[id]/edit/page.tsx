@@ -4,7 +4,6 @@ import { notFound, redirect } from "next/navigation";
 import { EditListingForm } from "@/components/edit-listing-form";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { hasMapsKey } from "@/lib/maps";
 import { hasImageStorage } from "@/lib/storage";
 import { LISTING_IMAGE_SELECT } from "@/lib/images";
 import type { ListingTag } from "@/generated/prisma/enums";
@@ -56,14 +55,6 @@ export default async function EditListingPage(
         Changes go live immediately. Anyone already in a chat with you keeps
         their thread.
       </p>
-
-      {!hasMapsKey() && (
-        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900">
-          <span className="font-medium">No Maps API key configured.</span>{" "}
-          Address suggestions come from a small built-in list, and the commute
-          to campus is estimated from straight-line distance.
-        </div>
-      )}
 
       <EditListingForm
         listingId={listing.id}

@@ -1,6 +1,5 @@
 import NextAuth, { type DefaultSession } from "next-auth";
 import Google from "next-auth/providers/google";
-import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 
 import { prisma } from "./prisma";
@@ -12,68 +11,26 @@ declare module "next-auth" {
   }
 }
 
-/** Google OAuth is only wired up when both credentials are present. */
-export const hasGoogleAuth = Boolean(
-  process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
-);
-
 /**
- * Demo sign-in: pick any seeded account without a password.
+ * Google is the only way in. GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are
+ * required: there is no passwordless demo provider behind this, so sign-in
+ * fails loudly rather than handing out seeded accounts.
  *
- * HACKATHON CUT CORNER. It exists so the app is demoable with zero OAuth
- * setup, and it disappears the moment GOOGLE_CLIENT_ID/SECRET are configured.
- * Never deploy this publicly without Google credentials set.
+ * Read at request time by NextAuth, not asserted at import, so `next build`
+ * still works in an environment without the secrets.
  */
-export const allowDemoLogin = !hasGoogleAuth;
-
-const providers = [];
-
-if (hasGoogleAuth) {
-  providers.push(
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      allowDangerousEmailAccountLinking: true,
-    }),
-  );
-}
-
-if (allowDemoLogin) {
-  providers.push(
-    Credentials({
-      id: "demo",
-      name: "Demo account",
-      credentials: { email: { label: "Email", type: "text" } },
-      async authorize(credentials) {
-        const email =
-          typeof credentials?.email === "string"
-            ? credentials.email.trim().toLowerCase()
-            : "";
-        if (!email) return null;
-
-        const user = await prisma.user.upsert({
-          where: { email },
-          update: {},
-          create: {
-            email,
-            name: email.split("@")[0],
-            role: "BOTH",
-          },
-        });
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          image: user.image,
-        };
-      },
-    }),
-  );
-}
+const providers = [
+  Google({
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    allowDangerousEmailAccountLinking: true,
+  }),
+];
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
-  // JWT sessions so the demo Credentials provider can coexist with the adapter.
+  // JWT sessions: the role is re-read from the database in the jwt callback
+  // below, so a role change takes effect without a new sign-in.
   session: { strategy: "jwt" },
   secret: process.env.NEXTAUTH_SECRET,
   trustHost: true,
@@ -88,7 +45,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           select: { role: true },
         });
         // The row can vanish under a live session (account deleted, or the
-        // demo database reseeded). Invalidate rather than hand back a session
+        // database reseeded). Invalidate rather than hand back a session
         // pointing at a missing user, which would fail on the first write.
         if (!dbUser) return null;
         token.role = dbUser.role;

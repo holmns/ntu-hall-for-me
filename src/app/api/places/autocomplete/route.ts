@@ -18,6 +18,6 @@ export async function GET(request: Request) {
   const input = searchParams.get("q") ?? "";
   const sessionToken = searchParams.get("session") ?? undefined;
 
-  const { suggestions, fromApi } = await autocompletePlaces(input, sessionToken);
-  return NextResponse.json({ suggestions, fromApi });
+  const suggestions = await autocompletePlaces(input, sessionToken);
+  return NextResponse.json({ suggestions });
 }

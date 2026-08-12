@@ -68,17 +68,12 @@ async function Results({
   query: string;
   chips: ChipFilters;
 }) {
-  const { intent, results, relaxations, rankedBy } = await searchListings(
-    query,
-    chips,
-  );
+  const { intent, results, relaxations } = await searchListings(query, chips);
   const mode = intent.travelMode ?? "transit";
 
   return (
     <div className="mt-6">
-      {query.trim() && (
-        <IntentPanel intent={intent} rankedBy={rankedBy} count={results.length} />
-      )}
+      {query.trim() && <IntentPanel intent={intent} count={results.length} />}
 
       {relaxations.length > 0 && (
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">

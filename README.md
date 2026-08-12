@@ -13,6 +13,7 @@ after a conversation starts.
 ```bash
 npm install
 cp .env.example .env
+# Fill in the required keys below before going further.
 
 # Local Postgres with no Docker and no cloud account:
 npx prisma dev --detach --name ntuhall
@@ -25,11 +26,19 @@ npm run dev
 
 Open http://localhost:3000.
 
-**It runs with no API keys at all.** Google OAuth, OpenRouter and Google Maps
-are each optional; without them the app uses demo sign-in, keyword-based
-ranking, and a built-in list of NTU-area addresses with estimated commute
-times. Add keys to `.env` to switch each one to the real service. See
-`.env.example`.
+**Three API integrations are required and have no fallback.** Set them in
+`.env` before the first run:
+
+| Key | Needed for |
+| --- | --- |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | The only way to sign in |
+| `OPENROUTER_API_KEY` | Reading the seeker's sentence and ranking rooms |
+| `GOOGLE_MAPS_API_KEY` / `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Address lookup, the commute to campus, and the maps |
+
+Without them the app does not degrade to keyword search, demo sign-in or
+estimated commute times - those paths are gone, and each integration fails
+loudly instead. `npm run db:seed` also calls the Distance Matrix API, so the
+Maps key must be set before seeding. See `.env.example`.
 
 ## How matching works
 

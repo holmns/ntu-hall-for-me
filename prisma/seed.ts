@@ -477,8 +477,8 @@ async function main() {
       },
     });
 
-    // Uses the real Distance Matrix API when GOOGLE_MAPS_API_KEY is set,
-    // otherwise the offline estimate. Same code path as the provider form.
+    // Real Distance Matrix call, same code path as the provider form, so
+    // GOOGLE_MAPS_API_KEY must be set before seeding.
     const commute = await computeCommute(
       { lat: place.lat, lng: place.lng },
       item.category,

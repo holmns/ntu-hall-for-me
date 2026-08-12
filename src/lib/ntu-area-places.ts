@@ -1,13 +1,10 @@
 /**
- * Offline address book for NTU and the west-Singapore neighbourhoods around it.
+ * Fixed addresses for NTU and the west-Singapore neighbourhoods around it.
  *
- * Two jobs:
- *  1. Autocomplete fallback when GOOGLE_MAPS_API_KEY is not configured, so the
- *     provider flow is fully demoable with zero API keys.
- *  2. Source of addresses for the seed script.
- *
- * Coordinates are approximate block-level points, good enough for commute
- * estimates and map pins.
+ * Seed data only. The provider form never reads this: address suggestions come
+ * from the Places API, which is required. Coordinates are approximate
+ * block-level points, which is enough to hand the seed script a real origin for
+ * its Distance Matrix lookup.
  */
 export type NtuAreaPlace = {
   id: string;
