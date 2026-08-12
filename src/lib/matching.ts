@@ -130,26 +130,60 @@ export async function parseSeekerQuery(query: string): Promise<SeekerIntent> {
       (t) => !mustHaveTags.includes(t),
     );
 
-    return {
-      minPrice: normalisePrice(parsed.minPrice),
-      maxPrice: normalisePrice(parsed.maxPrice),
-      mustHaveTags,
-      niceToHaveTags,
-      category: parsed.category ?? null,
-      roomType: parsed.roomType ?? null,
-      travelMode: parsed.travelMode ?? null,
-      maxCommuteMin:
-        typeof parsed.maxCommuteMin === "number" && parsed.maxCommuteMin > 0
-          ? Math.round(parsed.maxCommuteMin)
-          : null,
-      nuance: parsed.nuance?.trim() ?? "",
-      summary: parsed.summary?.trim() || trimmed,
-      source: "llm",
-    };
+    return groundIntent(
+      {
+        minPrice: normalisePrice(parsed.minPrice),
+        maxPrice: normalisePrice(parsed.maxPrice),
+        mustHaveTags,
+        niceToHaveTags,
+        category: parsed.category ?? null,
+        roomType: parsed.roomType ?? null,
+        travelMode: parsed.travelMode ?? null,
+        maxCommuteMin:
+          typeof parsed.maxCommuteMin === "number" && parsed.maxCommuteMin > 0
+            ? Math.round(parsed.maxCommuteMin)
+            : null,
+        nuance: parsed.nuance?.trim() ?? "",
+        summary: parsed.summary?.trim() || trimmed,
+        source: "llm",
+      },
+      trimmed,
+    );
   } catch (error) {
     console.error("[matching] query parse failed, using heuristics:", error);
     return heuristicIntent(trimmed);
   }
+}
+
+/**
+ * Drops model-inferred HARD constraints that are not actually grounded in the
+ * seeker's words.
+ *
+ * Real models over-constrain: "quiet room near campus" came back as
+ * category=OFF_CAMPUS plus a 15-minute *walking* limit, which excluded every
+ * on-campus hall (the closest listings of all) and cut 20 rooms down to 1.
+ * The seeker said none of that. Anything left null here still influences
+ * ranking through `nuance`, it just stops silently deleting listings.
+ */
+export function groundIntent(intent: SeekerIntent, query: string): SeekerIntent {
+  const q = query.toLowerCase();
+
+  const mentionsNumber = /\d/.test(q);
+  const mentionsDuration = /\d+\s*(min|minute|hr|hour)/.test(q);
+  // "near campus" must NOT count as a category signal.
+  const mentionsCategory =
+    /on[- ]?campus|off[- ]?campus|\bhalls?\b|\bdorm|\bhostel|\bsublet/.test(q);
+  const mentionsTravelMode =
+    /walk|bus\b|mrt|transit|public transport|driv|\bcar\b|cycl|\bbike/.test(q);
+
+  return {
+    ...intent,
+    minPrice: mentionsNumber ? intent.minPrice : null,
+    maxPrice: mentionsNumber ? intent.maxPrice : null,
+    maxCommuteMin: mentionsDuration ? intent.maxCommuteMin : null,
+    category: mentionsCategory ? intent.category : null,
+    travelMode: mentionsTravelMode ? intent.travelMode : null,
+  };
 }
 
 function normalisePrice(value: number | null | undefined): number | null {
