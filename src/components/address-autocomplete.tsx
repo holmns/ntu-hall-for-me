@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 
+import { LocationPicker } from "./location-picker";
+
 type Suggestion = { placeId: string; primary: string; secondary: string };
 
 /**
@@ -28,9 +30,15 @@ export function AddressAutocomplete({
     address: string;
   } | null>(null);
   const [sessionToken, setSessionToken] = useState(() => crypto.randomUUID());
+  // `coords` is what gets submitted; `anchor` is the geocoded point the picker
+  // recentres on. They diverge once the provider drags the pin.
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
     null,
   );
+  const [anchor, setAnchor] = useState<{ lat: number; lng: number } | null>(
+    null,
+  );
+  const [pinAdjusted, setPinAdjusted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Debounced lookup.
@@ -98,6 +106,8 @@ export function AddressAutocomplete({
         setSelected({ placeId: suggestion.placeId, address: detail.address || label });
         setQuery(detail.address || label);
         setCoords({ lat: detail.lat, lng: detail.lng });
+        setAnchor({ lat: detail.lat, lng: detail.lng });
+        setPinAdjusted(false);
       }
     } catch {
       // Submit-time revalidation will catch a missing coordinate.
@@ -131,6 +141,8 @@ export function AddressAutocomplete({
           setQuery(e.target.value);
           setSelected(null);
           setCoords(null);
+          setAnchor(null);
+          setPinAdjusted(false);
         }}
         onFocus={() => suggestions.length > 0 && setOpen(true)}
         onKeyDown={onKeyDown}
@@ -147,6 +159,11 @@ export function AddressAutocomplete({
       <input type="hidden" name="placeId" value={selected?.placeId ?? ""} />
       <input type="hidden" name="lat" value={coords?.lat ?? ""} />
       <input type="hidden" name="lng" value={coords?.lng ?? ""} />
+      <input
+        type="hidden"
+        name="pinAdjusted"
+        value={pinAdjusted ? "true" : "false"}
+      />
 
       {loading && (
         <span className="absolute right-3 top-2.5 text-xs text-ink-faint">
@@ -193,6 +210,17 @@ export function AddressAutocomplete({
         </p>
       )}
       {error && <p className="mt-1.5 text-xs text-brand">{error}</p>}
+
+      <div className="mt-3">
+        <LocationPicker
+          value={anchor}
+          disabled={!anchor}
+          onChange={(point, adjusted) => {
+            setCoords(point);
+            setPinAdjusted(adjusted);
+          }}
+        />
+      </div>
     </div>
   );
 }

@@ -2,72 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { loadMapClasses } from "@/lib/maps-client";
+
 const NTU = { lat: 1.3483, lng: 103.6831 };
-
-/**
- * Minimal structural type for the slice of the Maps JS API used here, so we
- * avoid pulling in @types/google.maps for one map.
- */
-type MapCtor = new (el: HTMLElement, opts: Record<string, unknown>) => object;
-type OverlayCtor = new (opts: Record<string, unknown>) => object;
-
-type MapsLibrary = { Map: MapCtor; Circle: OverlayCtor };
-type MarkerLibrary = { Marker: OverlayCtor };
-
-type MapsNamespace = MapsLibrary &
-  MarkerLibrary & { SymbolPath: { CIRCLE: unknown } };
-
-function getMapsNamespace(): MapsNamespace | null {
-  const ns = (globalThis as { google?: { maps?: MapsNamespace } }).google?.maps;
-  return ns?.Map ? ns : null;
-}
-
-const CALLBACK_NAME = "__ntuRoomFinderMapsReady";
-let mapsLoader: Promise<void> | null = null;
-
-/**
- * Injects the Maps JS API once per page.
- *
- * Uses the `callback` parameter rather than the script's `onload`: with
- * `loading=async`, onload fires before the namespace is populated, so
- * `google.maps.Map` is still undefined at that point. Google only guarantees
- * the classes exist once `callback` fires.
- */
-function loadMapsApi(apiKey: string): Promise<void> {
-  if (mapsLoader) return mapsLoader;
-  mapsLoader = new Promise<void>((resolve, reject) => {
-    if (typeof window === "undefined") return reject(new Error("no window"));
-    if (getMapsNamespace()) return resolve();
-
-    const timer = setTimeout(
-      () => reject(new Error("Google Maps timed out")),
-      15_000,
-    );
-    (window as unknown as Record<string, unknown>)[CALLBACK_NAME] = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-
-    const script = document.createElement("script");
-    script.src =
-      `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}` +
-      `&libraries=maps,marker&loading=async&callback=${CALLBACK_NAME}`;
-    script.async = true;
-    script.onerror = () => {
-      clearTimeout(timer);
-      reject(new Error("Failed to load Google Maps"));
-    };
-    document.head.appendChild(script);
-  });
-  return mapsLoader;
-}
-
-async function loadMapClasses(apiKey: string): Promise<MapsNamespace> {
-  await loadMapsApi(apiKey);
-  const ns = getMapsNamespace();
-  if (!ns) throw new Error("Maps namespace did not initialise");
-  return ns;
-}
 
 /**
  * Shows the jittered approximate location, never the exact pin. The radius

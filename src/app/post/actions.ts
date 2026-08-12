@@ -6,7 +6,12 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { approximateLocation, computeCommute, getPlaceDetail } from "@/lib/maps";
+import {
+  approximateLocation,
+  computeCommute,
+  getPlaceDetail,
+  haversineMeters,
+} from "@/lib/maps";
 import { ALL_TAGS, PRICE_MAX, PRICE_MIN } from "@/lib/constants";
 
 const schema = z.object({
@@ -28,7 +33,18 @@ const schema = z.object({
   address: z.string().trim().min(5, "Pick an address from the suggestions"),
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),
+  pinAdjusted: z
+    .union([z.literal("true"), z.literal("false")])
+    .optional()
+    .transform((v) => v === "true"),
 });
+
+/**
+ * How far the provider may drag the pin from the geocoded address. Wide enough
+ * to move across an HDB estate to the right block, tight enough that a
+ * hand-edited hidden field cannot relocate the listing.
+ */
+const MAX_ADJUST_M = 2000;
 
 export type PostListingState = {
   error?: string;
@@ -57,6 +73,7 @@ export async function createListing(
     address: formData.get("address"),
     lat: formData.get("lat"),
     lng: formData.get("lng"),
+    pinAdjusted: formData.get("pinAdjusted") ?? undefined,
   });
 
   if (!parsed.success) {
@@ -70,15 +87,19 @@ export async function createListing(
 
   const data = parsed.data;
 
-  // Re-resolve the place server-side when we have a placeId, so the stored
-  // coordinates cannot be spoofed by editing the hidden form fields.
+  // Re-resolve the place server-side so the stored coordinates cannot be
+  // spoofed by editing hidden form fields. The provider may still fine-tune
+  // the pin (Places returns a building, not the right block), but only within
+  // MAX_ADJUST_M of the address the place actually resolves to.
   let point = { lat: data.lat, lng: data.lng };
   let address = data.address;
   if (data.placeId) {
     const detail = await getPlaceDetail(data.placeId);
     if (detail) {
-      point = { lat: detail.lat, lng: detail.lng };
+      const anchor = { lat: detail.lat, lng: detail.lng };
       address = detail.address || address;
+      const drift = haversineMeters(anchor, point);
+      point = data.pinAdjusted && drift <= MAX_ADJUST_M ? point : anchor;
     }
   }
 
