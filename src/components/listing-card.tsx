@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { CATEGORY_LABELS, ROOM_TYPE_LABELS, TAG_LABELS } from "@/lib/constants";
 import { commuteMinutes, type TravelMode } from "@/lib/matching";
+import { redactLocationDetails } from "@/lib/redaction";
 import type { ListingTag } from "@/generated/prisma/enums";
 import type { ListingWithProvider } from "@/lib/matching";
 
@@ -74,8 +75,9 @@ export function ListingCard({
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-4">
+            {/* Cards are always a public view, so the title is always redacted. */}
             <h3 className="text-[15px] font-semibold leading-snug text-ink group-hover:text-brand">
-              {listing.title}
+              {redactLocationDetails(listing.title)}
             </h3>
             <div className="shrink-0 text-right">
               <div className="text-[15px] font-semibold tabular-nums text-ink">

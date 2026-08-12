@@ -84,8 +84,8 @@ export function ChatThread({
               No messages yet
             </p>
             <p className="mt-1 max-w-xs text-[13px] leading-relaxed text-ink-soft">
-              Say hello to {peerName}. Once you send the first message, the
-              exact address of this listing is unlocked for you.
+              Say hello to {peerName}. The exact address is revealed once they
+              reply, so it stays their decision to share it.
             </p>
           </div>
         ) : (

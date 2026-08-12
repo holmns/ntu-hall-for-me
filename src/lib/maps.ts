@@ -57,8 +57,14 @@ export function haversineMeters(a: LatLng, b: LatLng): number {
 }
 
 /**
- * Public-safe coordinates. Offsets the true point by a deterministic ~250m so
- * the map pin shows the neighbourhood without pinpointing the unit.
+ * Public-safe coordinates. Offsets the true point by a deterministic distance
+ * so the map shows the neighbourhood without pinpointing the unit.
+ *
+ * Offset is 250-550m and paired with a 600m display circle (see ApproxMap), so
+ * the true location sits somewhere inside a roughly 1km-wide area. An earlier
+ * 180-320m offset was too tight for Singapore HDB estates, where that radius
+ * often narrows to two or three blocks. Deterministic on purpose: a circle
+ * that jitters on every render would leak the centre through averaging.
  */
 export function approximateLocation(point: LatLng, seed: string): LatLng {
   let hash = 0;
@@ -66,7 +72,7 @@ export function approximateLocation(point: LatLng, seed: string): LatLng {
     hash = (hash * 31 + seed.charCodeAt(i)) | 0;
   }
   const angle = ((hash >>> 0) % 360) * (Math.PI / 180);
-  const offsetM = 180 + ((hash >>> 9) % 140); // 180-320m
+  const offsetM = 250 + ((hash >>> 9) % 300); // 250-550m
   const dLat = (offsetM * Math.cos(angle)) / 111_320;
   const dLng =
     (offsetM * Math.sin(angle)) /

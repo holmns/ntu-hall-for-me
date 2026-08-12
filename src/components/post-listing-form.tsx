@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 
 import { AddressAutocomplete } from "./address-autocomplete";
 import { createListing, type PostListingState } from "@/app/post/actions";
+import { findLocationDetails } from "@/lib/redaction";
 import {
   CATEGORY_LABELS,
   ON_CAMPUS_DISCLAIMER,
@@ -21,6 +22,10 @@ export function PostListingForm() {
     initialState,
   );
   const [category, setCategory] = useState<ListingCategory>("OFF_CAMPUS");
+  const [freeText, setFreeText] = useState({ title: "", description: "" });
+
+  // Warn before publishing rather than silently redacting later.
+  const leaks = findLocationDetails(`${freeText.title}\n${freeText.description}`);
 
   return (
     <form action={formAction} className="mt-6 space-y-5">
@@ -36,6 +41,9 @@ export function PostListingForm() {
             name="title"
             required
             maxLength={120}
+            onChange={(e) =>
+              setFreeText((v) => ({ ...v, title: e.target.value }))
+            }
             placeholder="e.g. Quiet common room, 10 min bus to NTU"
             className="field"
           />
@@ -94,7 +102,7 @@ export function PostListingForm() {
 
       <Section
         title="Address"
-        subtitle="Used once to work out the commute to NTU. Only the approximate area is shown publicly until you start a chat."
+        subtitle="Used once to work out the commute to NTU. Only an approximate area is shown publicly, until someone messages you and you choose to reply."
       >
         <Field label="Full address" error={state.fieldErrors?.address}>
           <AddressAutocomplete error={state.fieldErrors?.lat} />
@@ -112,10 +120,27 @@ export function PostListingForm() {
             rows={7}
             minLength={30}
             maxLength={4000}
+            onChange={(e) =>
+              setFreeText((v) => ({ ...v, description: e.target.value }))
+            }
             placeholder="What the room is like, who else lives there, the neighbourhood, any house rules, how long the lease can run..."
             className="field resize-y leading-relaxed"
           />
         </Field>
+
+        {leaks.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900">
+            <p className="font-medium">
+              This looks like part of your address:{" "}
+              {leaks.map((l) => `"${l.text}"`).join(", ")}
+            </p>
+            <p className="mt-1">
+              It will be hidden from your public listing until someone messages
+              you and you reply. You can leave it in, but describing the area
+              instead ({'"'}5 min from Pioneer MRT{'"'}) reads better.
+            </p>
+          </div>
+        )}
       </Section>
 
       <Section

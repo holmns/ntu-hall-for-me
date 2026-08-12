@@ -100,7 +100,7 @@ export function ApproxMap({
 
         const map = new Map(ref.current, {
           center: { lat, lng },
-          zoom: exact ? 16 : 15,
+          zoom: exact ? 16 : 14,
           disableDefaultUI: true,
           zoomControl: true,
           gestureHandling: "cooperative",
@@ -112,7 +112,9 @@ export function ApproxMap({
           new Circle({
             map,
             center: { lat, lng },
-            radius: 350,
+            // Must stay >= the max jitter in approximateLocation() so the true
+            // point is always somewhere inside the drawn circle.
+            radius: 600,
             strokeColor: "#b3202f",
             strokeOpacity: 0.5,
             strokeWeight: 1.5,

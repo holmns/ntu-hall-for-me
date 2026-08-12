@@ -1,10 +1,6 @@
 import { prisma } from "./prisma";
 
-/**
- * A thread is identified by (listing, the two participants). The exact address
- * of a listing is only revealed once a thread actually exists, so this is the
- * gate for that.
- */
+/** Whether any message exists between two people about a listing. */
 export async function hasConversation(
   listingId: string,
   userA: string,
@@ -21,6 +17,34 @@ export async function hasConversation(
     },
   });
   return count > 0;
+}
+
+/**
+ * Gate for revealing a listing's exact address and precise map pin.
+ *
+ * Requires a message in BOTH directions, so the provider has actively replied.
+ * A one-sided rule (any message unlocks) would let anyone with an account type
+ * "hi" and harvest the address, which is friction rather than consent. Making
+ * it mutual means the provider chose to share it with this specific person.
+ */
+export async function isAddressUnlocked(
+  listingId: string,
+  viewerId: string,
+  providerId: string,
+): Promise<boolean> {
+  // The provider always sees their own listing in full.
+  if (viewerId === providerId) return true;
+
+  const [fromViewer, fromProvider] = await Promise.all([
+    prisma.message.count({
+      where: { listingId, senderId: viewerId, receiverId: providerId },
+    }),
+    prisma.message.count({
+      where: { listingId, senderId: providerId, receiverId: viewerId },
+    }),
+  ]);
+
+  return fromViewer > 0 && fromProvider > 0;
 }
 
 export async function getThreadMessages(

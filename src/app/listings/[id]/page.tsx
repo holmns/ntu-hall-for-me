@@ -5,7 +5,8 @@ import { ApproxMap } from "@/components/approx-map";
 import { TagPill } from "@/components/listing-card";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { hasConversation } from "@/lib/conversations";
+import { isAddressUnlocked } from "@/lib/conversations";
+import { redactLocationDetails } from "@/lib/redaction";
 import {
   CATEGORY_LABELS,
   ON_CAMPUS_DISCLAIMER,
@@ -27,8 +28,17 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
   const user = await getCurrentUser();
   const isOwner = user?.id === listing.providerId;
   const addressUnlocked = user
-    ? isOwner || (await hasConversation(listing.id, user.id, listing.providerId))
+    ? await isAddressUnlocked(listing.id, user.id, listing.providerId)
     : false;
+
+  // The map pin is useless as protection if the free text spells out the
+  // block or unit, so the same gate applies to the listing's own words.
+  const title = addressUnlocked
+    ? listing.title
+    : redactLocationDetails(listing.title);
+  const description = addressUnlocked
+    ? listing.description
+    : redactLocationDetails(listing.description);
 
   const tags = listing.tags as ListingTag[];
   const onCampus = listing.category === "ON_CAMPUS";
@@ -65,7 +75,7 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
           </div>
 
           <h1 className="mt-3 text-balance text-2xl font-semibold leading-tight tracking-tight text-ink sm:text-[28px]">
-            {listing.title}
+            {title}
           </h1>
 
           <div className="mt-2 flex items-baseline gap-2">
@@ -86,7 +96,7 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
               Description
             </h2>
             <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed text-ink-soft">
-              {listing.description}
+              {description}
             </p>
           </section>
 
@@ -138,8 +148,8 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
                 >
                   <path d="M4.5 6V4.5a3.5 3.5 0 1 1 7 0V6H12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h.5Zm1.5 0h4V4.5a2 2 0 1 0-4 0V6Z" />
                 </svg>
-                Approximate area only. The exact address is shared once you
-                start a chat with the provider.
+                Approximate area only. The exact address is shared once the
+                provider replies to you, so it is their choice to share it.
               </p>
             )}
           </section>
