@@ -9,6 +9,19 @@ import type {
 } from "../src/generated/prisma/enums";
 import { approximateLocation, computeCommute } from "../src/lib/maps";
 import { NTU_AREA_PLACES } from "../src/lib/ntu-area-places";
+import { sniffImageType } from "../src/lib/images";
+import {
+  clearListingImages,
+  hasImageStorage,
+  uploadListingImage,
+} from "../src/lib/storage";
+import {
+  createPhotoPicker,
+  photoUrl,
+  PHOTO_HEIGHT,
+  PHOTO_WIDTH,
+  type MockPhoto,
+} from "./mock-room-photos";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -387,11 +400,66 @@ const LISTINGS: SeedListing[] = [
   },
 ];
 
+/**
+ * Downloads a photo and puts it in the listing-images bucket, so the seeded
+ * rows go through exactly the same storage path as a provider upload.
+ *
+ * Returns null instead of throwing: a demo database with no photos is a much
+ * better outcome than a seed that dies because the network was down.
+ */
+async function attachPhoto(
+  listingId: string,
+  photo: MockPhoto,
+  position: number,
+): Promise<boolean> {
+  try {
+    const response = await fetch(photoUrl(photo));
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const mimeType = sniffImageType(bytes);
+    if (!mimeType) throw new Error("not a recognised image");
+
+    const stored = await uploadListingImage(listingId, bytes, mimeType);
+    await prisma.listingImage.create({
+      data: {
+        listingId,
+        url: stored.url,
+        storagePath: stored.storagePath,
+        mimeType,
+        width: PHOTO_WIDTH,
+        height: PHOTO_HEIGHT,
+        alt: photo.alt,
+        position,
+      },
+    });
+    return true;
+  } catch (error) {
+    console.warn(`  ! photo ${photo.id} skipped:`, (error as Error).message);
+    return false;
+  }
+}
+
 async function main() {
   console.log("Clearing existing demo data...");
   await prisma.message.deleteMany();
   await prisma.listing.deleteMany();
   await prisma.user.deleteMany({ where: { email: { contains: "@demo." } } });
+
+  // Listing rows are gone, so their objects in the bucket are orphans now.
+  if (hasImageStorage()) {
+    const removed = await clearListingImages();
+    if (removed > 0) console.log(`Removed ${removed} orphaned images.`);
+  }
+
+  const withPhotos = hasImageStorage();
+  if (!withPhotos) {
+    console.warn(
+      "No Supabase storage credentials - seeding listings without photos.",
+    );
+  }
+  const pickPhotos = createPhotoPicker();
+  let photoCount = 0;
 
   console.log(`Seeding ${LISTINGS.length} listings...`);
 
@@ -420,7 +488,7 @@ async function main() {
       item.placeId,
     );
 
-    await prisma.listing.create({
+    const listing = await prisma.listing.create({
       data: {
         providerId: provider.id,
         title: item.title,
@@ -439,7 +507,16 @@ async function main() {
         distanceTransitMin: commute.transitMin,
         distanceDrivingMin: commute.drivingMin,
       },
+      select: { id: true },
     });
+
+    if (withPhotos) {
+      const photos = pickPhotos(item);
+      const results = await Promise.all(
+        photos.map((photo, index) => attachPhoto(listing.id, photo, index)),
+      );
+      photoCount += results.filter(Boolean).length;
+    }
   }
 
   // A demo seeker so the chat thread has a plausible counterparty.
@@ -454,7 +531,7 @@ async function main() {
   });
 
   const count = await prisma.listing.count();
-  console.log(`Done. ${count} listings in the database.`);
+  console.log(`Done. ${count} listings and ${photoCount} photos.`);
 }
 
 main()
