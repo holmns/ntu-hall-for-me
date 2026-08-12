@@ -10,6 +10,10 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // This file is read by the Prisma CLI only (migrate/db/studio/seed); the
+    // running app builds its own client in src/lib/prisma.ts. So prefer the
+    // direct connection here: Supabase's pooled (pgbouncer, port 6543) URL
+    // cannot run migrations, while the app wants the pooled one.
+    url: process.env["DIRECT_URL"] || process.env["DATABASE_URL"],
   },
 });
