@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NTU Room Finder
 
-## Getting Started
+Describe the room you want in plain English, get an AI-ranked list of rooms near
+NTU Singapore with a reason for every match.
 
-First, run the development server:
+Seekers search with a sentence instead of a filter form. Providers post once,
+with a fixed tag vocabulary plus a free-text description that the matching model
+actually reads. Matched pairs can chat, and the exact address is only revealed
+after a conversation starts.
+
+## Quick start
 
 ```bash
+npm install
+cp .env.example .env
+
+# Local Postgres with no Docker and no cloud account:
+npx prisma dev --detach --name ntuhall
+# Paste the printed postgres:// TCP url into DATABASE_URL in .env
+
+npm run db:migrate
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**It runs with no API keys at all.** Google OAuth, OpenRouter and Google Maps
+are each optional; without them the app uses demo sign-in, keyword-based
+ranking, and a built-in list of NTU-area addresses with estimated commute
+times. Add keys to `.env` to switch each one to the real service. See
+`.env.example`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## How matching works
 
-## Learn More
+1. The seeker's sentence goes to an LLM (via OpenRouter) which returns
+   structured filters: budget, must-have and nice-to-have tags, room type,
+   travel mode, commute limit, and the leftover nuance ("chill landlord").
+2. Those become a hard Prisma filter. If nothing matches, constraints are
+   relaxed step by step and the user is told what was relaxed.
+3. The surviving candidates go back to the model in a single call, which ranks
+   them and writes a one-line explanation per listing.
 
-To learn more about Next.js, take a look at the following resources:
+Commute times to campus are computed once with the Distance Matrix API when a
+listing is created and cached on the row, so searching never calls a Maps API.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Next.js 16 (App Router) - React 19 - TypeScript - Tailwind v4 - Prisma 7 -
+Postgres/Supabase - NextAuth v5 - Google Maps - OpenRouter
 
-## Deploy on Vercel
+## Scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Script | Purpose |
+| --- | --- |
+| `npm run dev` | Dev server |
+| `npm run build` / `start` | Production build and serve |
+| `npm run lint` / `typecheck` | ESLint / `tsc --noEmit` |
+| `npm run db:migrate` | Apply migrations |
+| `npm run db:seed` | 20 demo listings |
+| `npm run db:studio` | Prisma Studio |
+| `npm run db:reset` | Drop, re-migrate, re-seed |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See [CLAUDE.md](./CLAUDE.md) for architecture, where each piece of logic lives,
+and the known MVP cut corners.
+
+## Disclaimer
+
+A student project. Listings are user-submitted and unverified. On-campus
+entries are informal student sublets and are not affiliated with, endorsed by,
+or connected to NTU's official hall allocation.
