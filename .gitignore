@@ -42,3 +42,7 @@ next-env.d.ts
 !.env.example
 
 /src/generated/prisma
+
+# agent guidance files (local only)
+CLAUDE.md
+AGENTS.md

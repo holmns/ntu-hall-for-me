@@ -61,9 +61,6 @@ Postgres/Supabase - NextAuth v5 - Google Maps - OpenRouter
 | `npm run db:studio` | Prisma Studio |
 | `npm run db:reset` | Drop, re-migrate, re-seed |
 
-See [CLAUDE.md](./CLAUDE.md) for architecture, where each piece of logic lives,
-and the known MVP cut corners.
-
 ## Disclaimer
 
 A student project. Listings are user-submitted and unverified. On-campus
