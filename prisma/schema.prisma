@@ -1,0 +1,178 @@
+// NTU Room Finder - data model
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  SEEKER
+  PROVIDER
+  BOTH
+}
+
+enum ListingCategory {
+  ON_CAMPUS
+  OFF_CAMPUS
+}
+
+enum RoomType {
+  SINGLE
+  SHARED
+  WHOLE_UNIT
+}
+
+enum ListingStatus {
+  ACTIVE
+  INACTIVE
+}
+
+/// Fixed tag vocabulary. Providers pick from these checkboxes; the seeker query
+/// parser is also constrained to this list so hard filtering stays exact-match.
+enum ListingTag {
+  AIRCON
+  ENSUITE
+  FURNISHED
+  WIFI_INCLUDED
+  UTILITIES_INCLUDED
+  PET_FRIENDLY
+  COOKING_ALLOWED
+  WASHING_MACHINE
+  STUDY_DESK
+  NEAR_MRT
+  QUIET
+  NO_AGENT_FEE
+  SHORT_LEASE
+  LONG_LEASE
+  FEMALE_ONLY
+  MALE_ONLY
+  ANY_GENDER
+}
+
+// ---------------------------------------------------------------------------
+// Auth + users
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(SEEKER)
+  createdAt     DateTime  @default(now())
+
+  accounts         Account[]
+  sessions         Session[]
+  listings         Listing[]
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Listings
+// ---------------------------------------------------------------------------
+
+model Listing {
+  id          String          @id @default(cuid())
+  providerId  String
+  title       String
+  description String
+  category    ListingCategory
+  /// Monthly rent in SGD.
+  price       Int
+  roomType    RoomType
+  tags        ListingTag[]
+
+  /// Exact address. Private: only revealed once a chat thread exists.
+  address String
+  /// Exact coordinates. Private, same rule as `address`.
+  lat     Float
+  lng     Float
+  /// Jittered coordinates safe for public display on the listing card/map.
+  approxLat Float
+  approxLng Float
+
+  /// Commute to NTU main campus, computed ONCE at creation via Distance Matrix
+  /// and cached here. Search never calls a Maps API. On-campus listings are
+  /// stored as 0 and excluded from distance-based ranking.
+  distanceWalkingMin Int
+  distanceTransitMin Int
+  distanceDrivingMin Int
+  distanceMeters     Int
+
+  status    ListingStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  provider User      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([status, category, price])
+  @@index([providerId])
+}
+
+// ---------------------------------------------------------------------------
+// Chat
+// ---------------------------------------------------------------------------
+
+model Message {
+  id         String   @id @default(cuid())
+  listingId  String
+  senderId   String
+  receiverId String
+  content    String
+  createdAt  DateTime @default(now())
+
+  listing  Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  sender   User    @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User    @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, createdAt])
+  @@index([receiverId])
+}
