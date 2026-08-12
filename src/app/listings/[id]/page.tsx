@@ -32,6 +32,10 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
 
   const user = await getCurrentUser();
   const isOwner = user?.id === listing.providerId;
+
+  // A withdrawn room should stop taking enquiries, but a bookmarked link
+  // deserves a better answer than a bare 404.
+  if (listing.status !== "ACTIVE" && !isOwner) return <Withdrawn />;
   const addressUnlocked = user
     ? await isAddressUnlocked(listing.id, user.id, listing.providerId)
     : false;
@@ -66,6 +70,21 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
         </svg>
         Back to search
       </Link>
+
+      {isOwner && listing.status !== "ACTIVE" && (
+        <p className="mt-4 rounded-xl border border-line bg-surface-muted px-4 py-3 text-[13px] leading-relaxed text-ink-soft">
+          <span className="font-medium text-ink">This listing is hidden.</span>{" "}
+          It does not appear in search and only you can open this page.
+          Reactivate it from{" "}
+          <Link
+            href={`/listings/${listing.id}/edit`}
+            className="font-medium text-brand hover:underline"
+          >
+            edit
+          </Link>
+          .
+        </p>
+      )}
 
       <div className="mt-4 grid gap-6 lg:grid-cols-[1fr_320px]">
         {/* ---------------------------------------------------------------- */}
@@ -218,9 +237,20 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
 
             <div className="mt-4">
               {isOwner ? (
-                <p className="rounded-lg bg-surface-muted px-3 py-2.5 text-[13px] text-ink-soft">
-                  This is your listing.
-                </p>
+                <div className="space-y-2">
+                  <Link
+                    href={`/listings/${listing.id}/edit`}
+                    className="btn-primary w-full"
+                  >
+                    Edit listing
+                  </Link>
+                  <Link
+                    href="/my-listings"
+                    className="btn-secondary w-full !font-normal"
+                  >
+                    All your listings
+                  </Link>
+                </div>
               ) : user ? (
                 <Link
                   href={`/messages/${listing.id}/${listing.providerId}`}
@@ -240,6 +270,26 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
           </div>
         </aside>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Shown instead of a deactivated listing. Deliberately reveals nothing about
+ * the room, but says plainly what happened so a saved link is not a dead end.
+ */
+function Withdrawn() {
+  return (
+    <div className="mx-auto max-w-md px-4 py-20 text-center sm:px-6">
+      <h1 className="text-xl font-semibold tracking-tight text-ink">
+        This room is no longer listed
+      </h1>
+      <p className="mt-2 text-[14px] leading-relaxed text-ink-soft">
+        The provider has taken it down, usually because the room is taken.
+      </p>
+      <Link href="/search" className="btn-primary mt-6">
+        Browse other rooms
+      </Link>
     </div>
   );
 }

@@ -33,6 +33,15 @@ export async function SiteHeader() {
               >
                 Messages
               </Link>
+              {/* Hidden on mobile for the same reason as Browse: a fifth item
+                  wraps the header. Providers reach it from their own listing
+                  page there. */}
+              <Link
+                href="/my-listings"
+                className="hidden whitespace-nowrap rounded-lg px-3 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink sm:block"
+              >
+                Your listings
+              </Link>
               <Link
                 href="/post"
                 className="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink sm:px-3"
