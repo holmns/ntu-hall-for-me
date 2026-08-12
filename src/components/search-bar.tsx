@@ -1,0 +1,230 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+
+import { CATEGORY_LABELS, ROOM_TYPE_LABELS } from "@/lib/constants";
+import type { ListingCategory, RoomType } from "@/generated/prisma/enums";
+
+export type SearchBarValues = {
+  q: string;
+  category: ListingCategory | "";
+  roomType: RoomType | "";
+  minPrice: string;
+  maxPrice: string;
+};
+
+const EXAMPLES = [
+  "quiet room near campus, under $700, don't mind sharing",
+  "hall sublet for one semester, cheap as possible",
+  "ensuite with aircon, walking distance to NTU",
+  "pet friendly place, chill landlord, around $800",
+];
+
+export function SearchBar({
+  initial,
+  showExamples = false,
+  autoFocus = false,
+}: {
+  initial?: Partial<SearchBarValues>;
+  showExamples?: boolean;
+  autoFocus?: boolean;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [values, setValues] = useState<SearchBarValues>({
+    q: initial?.q ?? "",
+    category: initial?.category ?? "",
+    roomType: initial?.roomType ?? "",
+    minPrice: initial?.minPrice ?? "",
+    maxPrice: initial?.maxPrice ?? "",
+  });
+  const [filtersOpen, setFiltersOpen] = useState(
+    Boolean(initial?.category || initial?.roomType || initial?.minPrice || initial?.maxPrice),
+  );
+
+  function submit(overrideQuery?: string) {
+    const params = new URLSearchParams();
+    const q = overrideQuery ?? values.q;
+    if (q.trim()) params.set("q", q.trim());
+    if (values.category) params.set("category", values.category);
+    if (values.roomType) params.set("roomType", values.roomType);
+    if (values.minPrice) params.set("min", values.minPrice);
+    if (values.maxPrice) params.set("max", values.maxPrice);
+    startTransition(() => {
+      router.push(`/search?${params.toString()}`);
+    });
+  }
+
+  const activeFilterCount = [
+    values.category,
+    values.roomType,
+    values.minPrice,
+    values.maxPrice,
+  ].filter(Boolean).length;
+
+  return (
+    <div className="w-full">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+        className="card flex items-center gap-2 p-2 shadow-[0_1px_3px_rgba(28,26,23,0.05)] focus-within:border-brand focus-within:shadow-[0_0_0_3px_var(--color-brand-soft)]"
+      >
+        <svg
+          viewBox="0 0 20 20"
+          className="ml-2 h-4.5 w-4.5 shrink-0 text-ink-faint"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+        >
+          <circle cx="9" cy="9" r="6" />
+          <path d="m14 14 4 4" strokeLinecap="round" />
+        </svg>
+        <input
+          type="text"
+          value={values.q}
+          onChange={(e) => setValues((v) => ({ ...v, q: e.target.value }))}
+          placeholder="Describe the room you want, in your own words"
+          aria-label="Describe the room you want"
+          autoFocus={autoFocus}
+          className="min-w-0 flex-1 bg-transparent py-1.5 text-[15px] text-ink outline-none placeholder:text-ink-faint"
+        />
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((o) => !o)}
+          aria-expanded={filtersOpen}
+          className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[13px] text-ink-soft transition-colors hover:bg-surface-muted sm:inline-flex"
+        >
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[10px] font-semibold text-white tabular-nums">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+        <button type="submit" disabled={isPending} className="btn-primary shrink-0">
+          {isPending ? "Searching" : "Search"}
+        </button>
+      </form>
+
+      <button
+        type="button"
+        onClick={() => setFiltersOpen((o) => !o)}
+        className="mt-2 text-[13px] text-ink-soft underline-offset-2 hover:underline sm:hidden"
+      >
+        {filtersOpen ? "Hide filters" : "Filters"}
+        {activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+      </button>
+
+      {filtersOpen && (
+        <div className="card mt-2 grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-medium text-ink-soft">
+              Category
+            </span>
+            <select
+              value={values.category}
+              onChange={(e) =>
+                setValues((v) => ({
+                  ...v,
+                  category: e.target.value as ListingCategory | "",
+                }))
+              }
+              className="field"
+            >
+              <option value="">Any</option>
+              {(
+                Object.keys(CATEGORY_LABELS) as ListingCategory[]
+              ).map((c) => (
+                <option key={c} value={c}>
+                  {CATEGORY_LABELS[c]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-medium text-ink-soft">
+              Room type
+            </span>
+            <select
+              value={values.roomType}
+              onChange={(e) =>
+                setValues((v) => ({
+                  ...v,
+                  roomType: e.target.value as RoomType | "",
+                }))
+              }
+              className="field"
+            >
+              <option value="">Any</option>
+              {(Object.keys(ROOM_TYPE_LABELS) as RoomType[]).map((r) => (
+                <option key={r} value={r}>
+                  {ROOM_TYPE_LABELS[r]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-medium text-ink-soft">
+              Min price (SGD)
+            </span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              step={50}
+              value={values.minPrice}
+              onChange={(e) =>
+                setValues((v) => ({ ...v, minPrice: e.target.value }))
+              }
+              placeholder="0"
+              className="field"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-medium text-ink-soft">
+              Max price (SGD)
+            </span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              step={50}
+              value={values.maxPrice}
+              onChange={(e) =>
+                setValues((v) => ({ ...v, maxPrice: e.target.value }))
+              }
+              placeholder="Any"
+              className="field"
+            />
+          </label>
+        </div>
+      )}
+
+      {showExamples && (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-ink-faint">Try:</span>
+          {EXAMPLES.map((example) => (
+            <button
+              key={example}
+              type="button"
+              onClick={() => {
+                setValues((v) => ({ ...v, q: example }));
+                submit(example);
+              }}
+              className="rounded-full border border-line bg-surface px-3 py-1.5 text-xs text-ink-soft transition-colors hover:border-brand-line hover:bg-brand-soft hover:text-brand"
+            >
+              {example}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

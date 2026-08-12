@@ -1,0 +1,88 @@
+import { signIn, signOut } from "@/lib/auth";
+
+export function SignOutButton() {
+  return (
+    <form
+      action={async () => {
+        "use server";
+        await signOut({ redirectTo: "/" });
+      }}
+    >
+      <button
+        type="submit"
+        className="rounded-lg px-3 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink"
+      >
+        Sign out
+      </button>
+    </form>
+  );
+}
+
+export function GoogleSignInButton({ callbackUrl }: { callbackUrl: string }) {
+  return (
+    <form
+      action={async () => {
+        "use server";
+        await signIn("google", { redirectTo: callbackUrl });
+      }}
+    >
+      <button type="submit" className="btn-secondary w-full !py-2.5">
+        <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+          <path
+            fill="#4285F4"
+            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.57c2.08-1.92 3.28-4.74 3.28-8.09Z"
+          />
+          <path
+            fill="#34A853"
+            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.76c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z"
+          />
+          <path
+            fill="#FBBC05"
+            d="M5.84 14.11a6.6 6.6 0 0 1 0-4.22V7.05H2.18a11 11 0 0 0 0 9.9l3.66-2.84Z"
+          />
+          <path
+            fill="#EA4335"
+            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1a11 11 0 0 0-9.82 6.05l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38Z"
+          />
+        </svg>
+        Continue with Google
+      </button>
+    </form>
+  );
+}
+
+export function DemoSignInButton({
+  email,
+  label,
+  hint,
+  callbackUrl,
+}: {
+  email: string;
+  label: string;
+  hint: string;
+  callbackUrl: string;
+}) {
+  return (
+    <form
+      action={async () => {
+        "use server";
+        await signIn("demo", { email, redirectTo: callbackUrl });
+      }}
+    >
+      <button
+        type="submit"
+        className="flex w-full items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-left transition-colors hover:border-line-strong hover:bg-surface-muted"
+      >
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-soft text-sm font-semibold text-brand">
+          {label.charAt(0)}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium text-ink">
+            {label}
+          </span>
+          <span className="block truncate text-xs text-ink-faint">{hint}</span>
+        </span>
+      </button>
+    </form>
+  );
+}
