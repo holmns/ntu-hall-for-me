@@ -51,9 +51,11 @@ Maps key must be set before seeding. See `.env.example`.
    cosine distance between the query vector and each listing's vector
    (pgvector). If nothing matches, constraints are relaxed step by step and the
    user is told what was relaxed.
-3. The top 10 go to the model in a single call that writes a one-line
-   explanation each. The page does not wait for it: rooms render in their final
-   order and the reasons stream into the cards afterwards.
+3. The top 10 go to the model in a single streamed call that reorders them and
+   writes a one-line explanation each. Similarity cannot weigh price against
+   commute, so the model does. The response puts the order first, so the page
+   commits to it after ~120 tokens and the explanations stream into the cards
+   afterwards - the rooms never move once rendered.
 
 Listings are embedded when posted or edited, never at search time. Run
 `npm run db:embed` after adding the pgvector migration to an existing database.

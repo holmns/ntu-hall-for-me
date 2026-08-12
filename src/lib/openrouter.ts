@@ -43,6 +43,99 @@ function requireApiKey(): string {
   return apiKey;
 }
 
+function requestBody(system: string, user: string, maxTokens: number) {
+  return {
+    model: process.env.OPENROUTER_MODEL?.trim() || DEFAULT_MODEL,
+    temperature: 0.2,
+    max_tokens: maxTokens,
+    response_format: { type: "json_object" as const },
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  };
+}
+
+/**
+ * Streams the assistant's content deltas as they are generated.
+ *
+ * The point is not throughput, it is that the *start* of a JSON object is
+ * usable before the end exists: the ranking call puts the final order in the
+ * first ~120 tokens and the explanations in the next ~500, so the caller can
+ * commit to an order long before the reasons finish. See `rerankAndExplain`.
+ */
+export async function* chatStream({
+  system,
+  user,
+  maxTokens = 1500,
+  timeoutMs = 30_000,
+}: {
+  system: string;
+  user: string;
+  maxTokens?: number;
+  timeoutMs?: number;
+}): AsyncGenerator<string> {
+  const apiKey = requireApiKey();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(completionsUrl(), {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://ntu-room-finder.local",
+        "X-Title": "NTU Room Finder",
+      },
+      body: JSON.stringify({ ...requestBody(system, user, maxTokens), stream: true }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new OpenRouterError(
+        `OpenRouter ${res.status}: ${body.slice(0, 300)}`,
+      );
+    }
+    if (!res.body) throw new OpenRouterError("OpenRouter returned no body");
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE frames are newline delimited; keep the trailing partial line.
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        // OpenRouter sends ": OPENROUTER PROCESSING" keepalive comments.
+        if (!trimmed || trimmed.startsWith(":")) continue;
+        if (!trimmed.startsWith("data:")) continue;
+        const payload = trimmed.slice("data:".length).trim();
+        if (payload === "[DONE]") return;
+        try {
+          const chunk = JSON.parse(payload) as {
+            choices?: { delta?: { content?: string } }[];
+          };
+          const delta = chunk.choices?.[0]?.delta?.content;
+          if (delta) yield delta;
+        } catch {
+          // A frame split across reads is retried on the next pass.
+        }
+      }
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function chatJson<T>({
   system,
   user,
@@ -70,16 +163,7 @@ export async function chatJson<T>({
         "HTTP-Referer": "https://ntu-room-finder.local",
         "X-Title": "NTU Room Finder",
       },
-      body: JSON.stringify({
-        model: process.env.OPENROUTER_MODEL?.trim() || DEFAULT_MODEL,
-        temperature: 0.2,
-        max_tokens: maxTokens,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      }),
+      body: JSON.stringify(requestBody(system, user, maxTokens)),
     });
 
     if (!res.ok) {

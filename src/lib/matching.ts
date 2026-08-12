@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { prisma } from "./prisma";
 import { Prisma } from "@/generated/prisma/client";
-import { chatJson } from "./openrouter";
+import { chatJson, chatStream, extractJson } from "./openrouter";
 import { embedText, toVectorLiteral } from "./embeddings";
 import { ALL_TAGS, TAG_LABELS } from "./constants";
 import { LISTING_IMAGE_SELECT, type ListingImageView } from "./images";
@@ -50,12 +50,13 @@ export type ReasonMap = Map<string, string>;
 
 export type SearchResult = {
   intent: SeekerIntent;
+  /** Already in final display order: the shortlist reranked, then the tail. */
   listings: ListingWithProvider[];
   /**
    * Reasons for the first REASON_LIMIT listings, deliberately NOT awaited by
-   * `searchListings`. The results page renders the list from the database
-   * order and lets this resolve into per-card Suspense boundaries, so the one
-   * slow LLM call never delays the rooms themselves.
+   * `searchListings`. They arrive from the same streamed call that produced the
+   * order, but hundreds of tokens later, so the page renders the rooms and lets
+   * this resolve into per-card Suspense boundaries.
    */
   reasons: Promise<ReasonMap>;
   /** Human-readable notes about constraints we had to relax to find anything. */
@@ -63,10 +64,10 @@ export type SearchResult = {
 };
 
 /**
- * How many listings get a written reason. Reasons are the expensive part of the
- * pipeline: the model emits ~45 tokens per listing and LLM latency is dominated
- * by generation, so asking for 10 instead of every result is most of the cost.
- * Cards past this render without one, exactly as they already do today.
+ * How many listings the model reranks and explains. Generation dominates LLM
+ * latency and each listing costs ~45 tokens of explanation, so this is the main
+ * cost dial. Rooms past it keep their vector position and render without a
+ * reason, which the card already handles.
  */
 export const REASON_LIMIT = 10;
 
@@ -403,18 +404,21 @@ const reasonsSchema = z.object({
   ),
 });
 
-const REASON_SYSTEM_PROMPT = `You explain why each room listing fits a student looking for housing near NTU Singapore.
+const REASON_SYSTEM_PROMPT = `You rank and explain room listings for a student looking for housing near NTU Singapore.
 
-You get the seeker's request and the listings that were shown to them, already filtered and already in their final display order. Do NOT reorder them and do not judge which is best - write one short explanation per listing.
+You get the seeker's request and a shortlist that already passed the hard filters (budget, tags, category) and was pre-sorted by how closely each description matches the request. Semantic similarity alone cannot weigh price against commute, so that judgement is yours.
 
-Return ONLY JSON:
-{"reasons": [{"id": "<listing id>", "reason": "<max 18 words>"}]}
+Return ONLY JSON, with "order" FIRST:
+{"order": ["<id best first>", ...], "reasons": [{"id": "<listing id>", "reason": "<max 18 words>"}]}
+
+Emitting "order" before "reasons" is required, not stylistic: the page renders as soon as the order arrives and fills the explanations in afterwards.
 
 Rules:
-- Include EVERY listing id exactly once, in the order you received them.
+- "order" must contain EVERY id you were given, exactly once, best fit first.
+- Weigh price, commute and how well the description answers the seeker's actual wording. Cheaper and closer is better, all else equal.
+- ON_CAMPUS listings are already on campus, so their commute is 0 by definition. Do NOT rank them highly just for being close - judge them on price, room type, tags and description like anything else.
 - reason must be concrete and specific to that listing: cite the budget fit, the commute, a tag, or a phrase from the description. Write it addressed to the seeker, e.g. "Within budget, 17 min by bus, landlord mentions keeping the flat quiet".
 - Never invent facts that are not in the listing data.
-- ON_CAMPUS listings are already on campus, so their commute is 0 by definition. Say so plainly rather than describing it as a short trip.
 - Prefer citing the part of the description that genuinely reflects the seeker's wording over simply listing tags.`;
 
 function candidatePayload(
@@ -439,52 +443,116 @@ function candidatePayload(
 }
 
 /**
- * One LLM call for the first REASON_LIMIT listings. Rejects if OpenRouter is
- * unreachable; the caller decides what a failed reason looks like, because by
- * then the rooms are already on screen and taking the page down over a missing
- * caption would be worse than the caption.
+/** cuids contain no `]`, so the first close bracket ends the order array. */
+const ORDER_FRAGMENT = /"order"\s*:\s*\[([^\]]*)\]/;
+
+export type RerankResult = {
+  /** Final display order for the shortlist. Resolves early in the stream. */
+  order: Promise<string[]>;
+  /** Explanations. Resolves once the whole object has arrived. */
+  reasons: Promise<ReasonMap>;
+};
+
+/**
+ * One streamed call that both reorders and explains the top REASON_LIMIT.
+ *
+ * Vector similarity picks the shortlist but cannot weigh $420 against $650 or
+ * 0 minutes against 48, so the model does that. The catch is that reordering
+ * after the page paints would move cards under the reader, and waiting for the
+ * whole response puts ~700 tokens of explanation on the critical path.
+ *
+ * Streaming resolves it: the prompt puts "order" first, so the final sequence
+ * is complete after ~120 tokens and the page can commit to it, while the
+ * explanations keep arriving into per-card Suspense boundaries. Nothing ever
+ * moves, and the wait is for the order alone.
  */
-export async function generateReasons(
+export function rerankAndExplain(
   intent: SeekerIntent,
   listings: ListingWithProvider[],
   originalQuery: string,
-): Promise<ReasonMap> {
-  // Browsing with an empty search bar: there is no request to explain a fit
-  // against, and the results page hides reasons without a query. Skip the call
-  // rather than spend its latency on output that is discarded.
-  if (listings.length === 0 || (!originalQuery.trim() && !intent.nuance.trim())) {
-    return new Map();
+): RerankResult {
+  const shortlist = listings.slice(0, REASON_LIMIT);
+  const ids = shortlist.map((l) => l.id);
+
+  // Browsing with an empty search bar: nothing to rank against, and the page
+  // hides reasons without a query. Skip the call entirely.
+  if (
+    shortlist.length === 0 ||
+    (!originalQuery.trim() && !intent.nuance.trim())
+  ) {
+    return { order: Promise.resolve(ids), reasons: Promise.resolve(new Map()) };
   }
 
-  const described = listings.slice(0, REASON_LIMIT);
-
-  const raw = await chatJson<unknown>({
-    system: REASON_SYSTEM_PROMPT,
-    user: JSON.stringify({
-      seekerQuery: originalQuery,
-      seekerNuance: intent.nuance,
-      budget: { min: intent.minPrice, max: intent.maxPrice },
-      preferredTravelMode: intent.travelMode ?? "transit",
-      niceToHave: intent.niceToHaveTags,
-      listings: candidatePayload(described, intent),
-    }),
-    // REASON_LIMIT entries at ~45 tokens each, with headroom.
-    maxTokens: 800,
+  let resolveOrder!: (value: string[]) => void;
+  let rejectOrder!: (reason: unknown) => void;
+  const order = new Promise<string[]>((resolve, reject) => {
+    resolveOrder = resolve;
+    rejectOrder = reject;
   });
 
-  const parsed = reasonsSchema.parse(raw);
-  const known = new Set(described.map((l) => l.id));
-  const reasons: ReasonMap = new Map();
+  const known = new Set(ids);
 
-  for (const entry of parsed.reasons) {
-    const reason = entry.reason.trim();
-    // Ignore ids the model invented or repeated. A listing the model skips
-    // simply renders without a reason, which the card already handles.
-    if (!known.has(entry.id) || reasons.has(entry.id) || !reason) continue;
-    reasons.set(entry.id, reason);
-  }
+  const reasons = (async (): Promise<ReasonMap> => {
+    let buffer = "";
+    let orderSettled = false;
 
-  return reasons;
+    try {
+      for await (const delta of chatStream({
+        system: REASON_SYSTEM_PROMPT,
+        user: JSON.stringify({
+          seekerQuery: originalQuery,
+          seekerNuance: intent.nuance,
+          budget: { min: intent.minPrice, max: intent.maxPrice },
+          preferredTravelMode: intent.travelMode ?? "transit",
+          niceToHave: intent.niceToHaveTags,
+          listings: candidatePayload(shortlist, intent),
+        }),
+        // The order array plus REASON_LIMIT entries at ~45 tokens each.
+        maxTokens: 1000,
+      })) {
+        buffer += delta;
+
+        if (orderSettled) continue;
+        const fragment = buffer.match(ORDER_FRAGMENT);
+        if (!fragment) continue;
+
+        try {
+          const parsed = JSON.parse(`[${fragment[1]}]`) as unknown;
+          const ranked = Array.isArray(parsed)
+            ? parsed.filter((id): id is string => typeof id === "string")
+            : [];
+          // Anything the model dropped keeps its vector position at the end,
+          // so a short or invented order cannot lose a room.
+          const seen = new Set(ranked.filter((id) => known.has(id)));
+          resolveOrder([...seen, ...ids.filter((id) => !seen.has(id))]);
+        } catch {
+          // Not valid JSON yet; keep reading.
+          continue;
+        }
+        orderSettled = true;
+      }
+    } catch (error) {
+      // The order is what the page is blocked on, so it must settle either way.
+      if (!orderSettled) rejectOrder(error);
+      throw error;
+    }
+
+    // A stream that ended without a usable order leaves the vector order.
+    if (!orderSettled) resolveOrder(ids);
+
+    const parsed = reasonsSchema.parse(extractJson<unknown>(buffer));
+    const map: ReasonMap = new Map();
+    for (const entry of parsed.reasons) {
+      const reason = entry.reason.trim();
+      // Ignore ids the model invented or repeated. A listing the model skips
+      // renders without a reason, which the card already handles.
+      if (!known.has(entry.id) || map.has(entry.id) || !reason) continue;
+      map.set(entry.id, reason);
+    }
+    return map;
+  })();
+
+  return { order, reasons };
 }
 
 // ---------------------------------------------------------------------------
@@ -509,6 +577,30 @@ export async function searchListings(
   ]);
 
   const { listings, relaxations } = await hardFilter(intent, chips, queryVector);
-  const reasons = generateReasons(intent, listings, query);
-  return { intent, listings, reasons, relaxations };
+  const { order, reasons } = rerankAndExplain(intent, listings, query);
+
+  // The one thing worth waiting for. It arrives after ~120 streamed tokens,
+  // well before the explanations, and committing to it here is what lets the
+  // cards render in their permanent positions.
+  //
+  // A failed rerank keeps the vector order rather than taking down a valid
+  // result list; the reasons promise rejects with the same error and the page
+  // says so. Attached before the await so the rejection is never unhandled.
+  reasons.catch(() => {});
+  const ranked = await order.catch((error) => {
+    console.error("[matching] rerank failed, keeping vector order:", error);
+    return listings.slice(0, REASON_LIMIT).map((l) => l.id);
+  });
+
+  const position = new Map(ranked.map((id, index) => [id, index]));
+  const shortlist = listings
+    .slice(0, REASON_LIMIT)
+    .sort((a, b) => (position.get(a.id) ?? 0) - (position.get(b.id) ?? 0));
+
+  return {
+    intent,
+    listings: [...shortlist, ...listings.slice(REASON_LIMIT)],
+    reasons,
+    relaxations,
+  };
 }
