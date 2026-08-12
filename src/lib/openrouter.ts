@@ -6,7 +6,21 @@
  * against models that wrap JSON in prose or code fences.
  */
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
-const DEFAULT_MODEL = "anthropic/claude-3.5-haiku";
+
+/**
+ * Search latency is dominated by these two calls, so the default is chosen for
+ * speed. Measured on the real pipeline (parse + filter + rank, 20 listings):
+ *
+ *   google/gemini-2.5-flash-lite      3.3s   <- default
+ *   anthropic/claude-haiku-4.5       ~5s     good quality alternative
+ *   qwen/qwen3-30b-a3b-instruct-2507 10.0s   slow to generate the ranking
+ *   openai/gpt-5-mini                ~15s
+ *
+ * Verify a model ID against https://openrouter.ai/api/v1/models before setting
+ * OPENROUTER_MODEL - retired IDs 404, and the failure is silent here because
+ * the pipeline falls back to keyword matching.
+ */
+const DEFAULT_MODEL = "google/gemini-2.5-flash-lite";
 
 /** Overridable so a proxy (or a local mock in tests) can stand in. */
 function completionsUrl(): string {
