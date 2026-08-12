@@ -2,47 +2,86 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { ImageRejected, prepareImage, type PreparedImage } from "@/lib/image-resize";
-import { IMAGE_ACCEPT_ATTR, MAX_IMAGES_PER_LISTING } from "@/lib/images";
+import { ImageRejected, prepareImage } from "@/lib/image-resize";
+import {
+  IMAGE_ACCEPT_ATTR,
+  MAX_IMAGES_PER_LISTING,
+  type ListingImageView,
+} from "@/lib/images";
 
 /**
- * Photo picker for the post form.
+ * Photo picker for the provider form, used for both posting and editing.
  *
- * Files are downscaled in the browser and then written back into the file
+ * One ordered list holds two kinds of tile: photos already in storage and
+ * files picked just now. Submitting sends an `imageSlot` field per tile, in
+ * display order, so a single POST can express keep, drop, reorder and add
+ * together - the server never has to guess what happened between two states.
+ *
+ * New files are downscaled in the browser and then written back into the file
  * input via DataTransfer, so the form still submits them as ordinary
- * multipart fields and the server action needs no separate upload endpoint.
- * The input is cleared the moment a selection arrives, so the originals can
- * never be submitted during the resize.
+ * multipart fields and no separate upload endpoint is needed. The input is
+ * cleared the moment a selection arrives, so the originals can never be
+ * submitted during the resize.
  */
+
+type Slot =
+  | { kind: "existing"; key: string; id: string; url: string }
+  | {
+      kind: "new";
+      key: string;
+      file: File;
+      width: number;
+      height: number;
+      previewUrl: string;
+    };
+
+function slotSrc(slot: Slot): string {
+  return slot.kind === "existing" ? slot.url : slot.previewUrl;
+}
+
 export function ImageUploader({
+  initial = [],
   onBusyChange,
   error,
 }: {
+  initial?: ListingImageView[];
   onBusyChange?: (busy: boolean) => void;
   error?: string;
 }) {
-  const [images, setImages] = useState<PreparedImage[]>([]);
+  const [slots, setSlots] = useState<Slot[]>(() =>
+    initial.map((image) => ({
+      kind: "existing" as const,
+      key: image.id,
+      id: image.id,
+      url: image.url,
+    })),
+  );
   const [rejections, setRejections] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const slotsRef = useRef(slots);
 
-  const imagesRef = useRef(images);
-
-  // Keep the file input in step with the tiles, including their order.
+  // Keep the file input in step with the tiles, including their order. Only
+  // new files go in it; kept photos travel as `imageSlot` ids.
   useEffect(() => {
-    imagesRef.current = images;
+    slotsRef.current = slots;
     const input = inputRef.current;
     if (!input || typeof DataTransfer === "undefined") return;
     const transfer = new DataTransfer();
-    for (const image of images) transfer.items.add(image.file);
+    for (const slot of slots) {
+      if (slot.kind === "new") transfer.items.add(slot.file);
+    }
     input.files = transfer.files;
-  }, [images]);
+  }, [slots]);
 
-  // Previews are object URLs; drop them when the form goes away.
+  // Previews of new files are object URLs; drop them when the form goes away.
+  // Stored photos are plain URLs and must not be revoked.
   useEffect(
     () => () => {
-      for (const image of imagesRef.current) URL.revokeObjectURL(image.previewUrl);
+      for (const slot of slotsRef.current) {
+        if (slot.kind === "new") URL.revokeObjectURL(slot.previewUrl);
+      }
     },
     [],
   );
@@ -55,9 +94,9 @@ export function ImageUploader({
     setBusy(true);
     onBusyChange?.(true);
 
-    const accepted: PreparedImage[] = [];
+    const accepted: Slot[] = [];
     const refused: string[] = [];
-    let room = MAX_IMAGES_PER_LISTING - images.length;
+    let room = MAX_IMAGES_PER_LISTING - slots.length;
 
     for (const file of incoming) {
       if (room <= 0) {
@@ -65,7 +104,8 @@ export function ImageUploader({
         break;
       }
       try {
-        accepted.push(await prepareImage(file));
+        const { id, ...prepared } = await prepareImage(file);
+        accepted.push({ kind: "new", key: id, ...prepared });
         room -= 1;
       } catch (cause) {
         refused.push(
@@ -76,28 +116,28 @@ export function ImageUploader({
       }
     }
 
-    setImages((prev) => [...prev, ...accepted].slice(0, MAX_IMAGES_PER_LISTING));
+    setSlots((prev) => [...prev, ...accepted].slice(0, MAX_IMAGES_PER_LISTING));
     setRejections(refused);
     setBusy(false);
     onBusyChange?.(false);
   }
 
-  function remove(id: string) {
-    const target = images.find((image) => image.id === id);
-    if (target) URL.revokeObjectURL(target.previewUrl);
-    setImages((prev) => prev.filter((image) => image.id !== id));
+  function remove(key: string) {
+    const target = slots.find((slot) => slot.key === key);
+    if (target?.kind === "new") URL.revokeObjectURL(target.previewUrl);
+    setSlots((prev) => prev.filter((slot) => slot.key !== key));
     setRejections([]);
   }
 
   function move(index: number, delta: number) {
     const target = index + delta;
-    if (target < 0 || target >= images.length) return;
-    const next = [...images];
+    if (target < 0 || target >= slots.length) return;
+    const next = [...slots];
     [next[index], next[target]] = [next[target], next[index]];
-    setImages(next);
+    setSlots(next);
   }
 
-  const full = images.length >= MAX_IMAGES_PER_LISTING;
+  const full = slots.length >= MAX_IMAGES_PER_LISTING;
 
   return (
     <div
@@ -131,15 +171,25 @@ export function ImageUploader({
         }}
       />
 
-      {/* Parallel to the file list, so the server can pair them by index. */}
-      {images.map((image) => (
-        <div key={`meta-${image.id}`}>
-          <input type="hidden" name="imageWidth" value={image.width} />
-          <input type="hidden" name="imageHeight" value={image.height} />
+      {/* Display order, and which tiles are kept versus newly uploaded. The
+          nth "new" here lines up with the nth file in the input above. */}
+      {slots.map((slot) => (
+        <div key={`slot-${slot.key}`}>
+          <input
+            type="hidden"
+            name="imageSlot"
+            value={slot.kind === "existing" ? `keep:${slot.id}` : "new"}
+          />
+          {slot.kind === "new" && (
+            <>
+              <input type="hidden" name="imageWidth" value={slot.width} />
+              <input type="hidden" name="imageHeight" value={slot.height} />
+            </>
+          )}
         </div>
       ))}
 
-      {images.length === 0 ? (
+      {slots.length === 0 ? (
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
@@ -176,14 +226,14 @@ export function ImageUploader({
               dragging ? "outline-2 outline-offset-4 outline-brand" : ""
             }`}
           >
-            {images.map((image, index) => (
+            {slots.map((slot, index) => (
               <li
-                key={image.id}
+                key={slot.key}
                 className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-line bg-surface-muted"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={image.previewUrl}
+                  src={slotSrc(slot)}
                   alt=""
                   className="h-full w-full object-cover"
                 />
@@ -196,7 +246,7 @@ export function ImageUploader({
 
                 <button
                   type="button"
-                  onClick={() => remove(image.id)}
+                  onClick={() => remove(slot.key)}
                   aria-label={`Remove photo ${index + 1}`}
                   className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-md bg-ink/70 text-white transition-colors hover:bg-ink"
                 >
@@ -221,7 +271,7 @@ export function ImageUploader({
                   />
                   <ReorderButton
                     direction="right"
-                    disabled={index === images.length - 1}
+                    disabled={index === slots.length - 1}
                     onClick={() => move(index, 1)}
                     label={`Move photo ${index + 1} later`}
                   />
@@ -253,7 +303,7 @@ export function ImageUploader({
           </ul>
 
           <p className="mt-2 text-xs text-ink-faint">
-            {images.length} of {MAX_IMAGES_PER_LISTING}. The first photo is the
+            {slots.length} of {MAX_IMAGES_PER_LISTING}. The first photo is the
             cover shown in search results - use the arrows to reorder.
           </p>
         </>

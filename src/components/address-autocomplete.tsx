@@ -14,13 +14,18 @@ type Suggestion = { placeId: string; primary: string; secondary: string };
  */
 export function AddressAutocomplete({
   error,
-  defaultValue = "",
+  initial,
 }: {
   error?: string;
-  defaultValue?: string;
+  /**
+   * The listing's saved location, when editing. It submits with an empty
+   * placeId, which is how the edit action knows the address was left alone and
+   * the cached commute can stand.
+   */
+  initial?: { address: string; lat: number; lng: number };
 }) {
   const listId = useId();
-  const [query, setQuery] = useState(defaultValue);
+  const [query, setQuery] = useState(initial?.address ?? "");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -28,15 +33,15 @@ export function AddressAutocomplete({
   const [selected, setSelected] = useState<{
     placeId: string;
     address: string;
-  } | null>(null);
+  } | null>(initial ? { placeId: "", address: initial.address } : null);
   const [sessionToken, setSessionToken] = useState(() => crypto.randomUUID());
   // `coords` is what gets submitted; `anchor` is the geocoded point the picker
   // recentres on. They diverge once the provider drags the pin.
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
-    null,
+    initial ? { lat: initial.lat, lng: initial.lng } : null,
   );
   const [anchor, setAnchor] = useState<{ lat: number; lng: number } | null>(
-    null,
+    initial ? { lat: initial.lat, lng: initial.lng } : null,
   );
   const [pinAdjusted, setPinAdjusted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -206,7 +211,7 @@ export function AddressAutocomplete({
           <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
             <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14Zm-1-4.6 5-5-1.1-1L7 8.3 5.1 6.4l-1 1L7 10.4Z" />
           </svg>
-          Address confirmed. Commute to NTU is calculated when you publish.
+          Address set. The commute to NTU is calculated from this point.
         </p>
       )}
       {error && <p className="mt-1.5 text-xs text-brand">{error}</p>}
