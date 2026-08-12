@@ -451,6 +451,17 @@ export async function rankListings(
 ): Promise<{ ranked: RankedListing[]; rankedBy: "llm" | "heuristic" }> {
   if (listings.length === 0) return { ranked: [], rankedBy: "heuristic" };
 
+  // Browsing with an empty search bar: there is nothing to rank against, and
+  // the results page hides reasons and rank numbers without a query. Ranking
+  // here would spend an LLM call and its latency on output that is discarded,
+  // so keep the query order (newest first) instead.
+  if (!originalQuery.trim() && !intent.nuance.trim()) {
+    return {
+      ranked: listings.map((listing) => ({ listing, score: 0, reason: "" })),
+      rankedBy: "heuristic",
+    };
+  }
+
   const candidates = listings.slice(0, MAX_CANDIDATES);
   const overflow = listings.slice(MAX_CANDIDATES);
 
