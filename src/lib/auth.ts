@@ -87,7 +87,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { id: token.sub },
           select: { role: true },
         });
-        token.role = dbUser?.role ?? "SEEKER";
+        // The row can vanish under a live session (account deleted, or the
+        // demo database reseeded). Invalidate rather than hand back a session
+        // pointing at a missing user, which would fail on the first write.
+        if (!dbUser) return null;
+        token.role = dbUser.role;
       }
       return token;
     },
