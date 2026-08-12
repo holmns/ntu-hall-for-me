@@ -2,9 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { loadMapClasses } from "@/lib/maps-client";
+import { DEFAULT_MAP_ID, loadMapClasses } from "@/lib/maps-client";
 
 const NTU = { lat: 1.3483, lng: 103.6831 };
+
+function ntuMarkerDot(): HTMLElement {
+  const dot = document.createElement("div");
+  dot.style.width = "12px";
+  dot.style.height = "12px";
+  dot.style.borderRadius = "50%";
+  dot.style.backgroundColor = "#0f766e";
+  dot.style.border = "2px solid #ffffff";
+  dot.style.boxShadow = "0 0 0 1px rgba(0, 0, 0, 0.15)";
+  return dot;
+}
 
 /**
  * Shows the jittered approximate location, never the exact pin. The radius
@@ -30,19 +41,20 @@ export function ApproxMap({
     let cancelled = false;
 
     loadMapClasses(apiKey)
-      .then(({ Map, Circle, Marker, SymbolPath }) => {
+      .then(({ Map, Circle, AdvancedMarkerElement }) => {
         if (cancelled || !ref.current) return;
 
         const map = new Map(ref.current, {
           center: { lat, lng },
           zoom: exact ? 16 : 14,
+          mapId: DEFAULT_MAP_ID,
           disableDefaultUI: true,
           zoomControl: true,
           gestureHandling: "cooperative",
         });
 
         if (exact) {
-          new Marker({ map, position: { lat, lng } });
+          new AdvancedMarkerElement({ map, position: { lat, lng } });
         } else {
           new Circle({
             map,
@@ -58,18 +70,11 @@ export function ApproxMap({
           });
         }
 
-        new Marker({
+        new AdvancedMarkerElement({
           map,
           position: NTU,
           title: "NTU main campus",
-          icon: {
-            path: SymbolPath.CIRCLE,
-            scale: 6,
-            fillColor: "#0f766e",
-            fillOpacity: 1,
-            strokeColor: "#ffffff",
-            strokeWeight: 2,
-          },
+          content: ntuMarkerDot(),
         });
 
         setStatus("ready");

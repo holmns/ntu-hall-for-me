@@ -5,6 +5,11 @@
  * with `loading=async`, onload fires before `google.maps.Map` exists, so
  * constructing a map there throws. Google only guarantees the namespace is
  * populated once the callback fires. Do not switch this to `script.onload`.
+ *
+ * Markers use the `marker` library's AdvancedMarkerElement (the legacy
+ * google.maps.Marker is deprecated). Advanced markers only render on a map
+ * that has a Map ID, so DEFAULT_MAP_ID falls back to Google's public demo
+ * ID when NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID is not configured.
  */
 type MapCtor = new (el: HTMLElement, opts: Record<string, unknown>) => GMap;
 type OverlayCtor = new (opts: Record<string, unknown>) => GOverlay;
@@ -23,16 +28,42 @@ export type GOverlay = {
   addListener: (event: string, handler: (e: { latLng: GLatLng }) => void) => void;
 };
 
+export type GAdvancedMarker = {
+  position: { lat: number; lng: number } | GLatLng | null;
+  map: GMap | null;
+  addListener: (event: string, handler: () => void) => void;
+};
+
+type AdvancedMarkerCtor = new (opts: {
+  map?: GMap | null;
+  position?: { lat: number; lng: number } | null;
+  title?: string;
+  content?: HTMLElement;
+  gmpDraggable?: boolean;
+}) => GAdvancedMarker;
+
+type PinElementCtor = new (opts: {
+  background?: string;
+  borderColor?: string;
+  glyphColor?: string;
+  scale?: number;
+}) => { element: HTMLElement };
+
 export type MapsNamespace = {
   Map: MapCtor;
   Circle: OverlayCtor;
-  Marker: OverlayCtor;
-  SymbolPath: { CIRCLE: unknown };
+  marker: {
+    AdvancedMarkerElement: AdvancedMarkerCtor;
+    PinElement: PinElementCtor;
+  };
 };
+
+export const DEFAULT_MAP_ID =
+  process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID?.trim() || "DEMO_MAP_ID";
 
 function getMapsNamespace(): MapsNamespace | null {
   const ns = (globalThis as { google?: { maps?: MapsNamespace } }).google?.maps;
-  return ns?.Map ? ns : null;
+  return ns?.Map && ns.marker?.AdvancedMarkerElement ? ns : null;
 }
 
 const CALLBACK_NAME = "__ntuRoomFinderMapsReady";
@@ -67,9 +98,31 @@ function loadMapsApi(apiKey: string): Promise<void> {
   return mapsLoader;
 }
 
-export async function loadMapClasses(apiKey: string): Promise<MapsNamespace> {
+/** AdvancedMarkerElement#position is a LatLng after a drag, a plain literal otherwise. */
+export function toLatLngLiteral(
+  pos: { lat: number; lng: number } | GLatLng | null,
+): { lat: number; lng: number } | null {
+  if (!pos) return null;
+  if (typeof (pos as GLatLng).lat === "function") {
+    const g = pos as GLatLng;
+    return { lat: g.lat(), lng: g.lng() };
+  }
+  return pos as { lat: number; lng: number };
+}
+
+export async function loadMapClasses(apiKey: string): Promise<{
+  Map: MapCtor;
+  Circle: OverlayCtor;
+  AdvancedMarkerElement: AdvancedMarkerCtor;
+  PinElement: PinElementCtor;
+}> {
   await loadMapsApi(apiKey);
   const ns = getMapsNamespace();
   if (!ns) throw new Error("Maps namespace did not initialise");
-  return ns;
+  return {
+    Map: ns.Map,
+    Circle: ns.Circle,
+    AdvancedMarkerElement: ns.marker.AdvancedMarkerElement,
+    PinElement: ns.marker.PinElement,
+  };
 }
