@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 import { prisma } from "./prisma";
+import { Prisma } from "@/generated/prisma/client";
 import { chatJson } from "./openrouter";
+import { embedText, toVectorLiteral } from "./embeddings";
 import { ALL_TAGS, TAG_LABELS } from "./constants";
 import { LISTING_IMAGE_SELECT, type ListingImageView } from "./images";
 import type {
@@ -228,9 +230,23 @@ type FilterAttempt = {
   note: string | null;
 };
 
+/** Hard cap on rows pulled per attempt, before the commute filter. */
+const MAX_ROWS = 100;
+
+/**
+ * Filtering and ordering both live in this one SQL statement, because Prisma
+ * cannot express `<=>` against the Unsupported vector column and splitting the
+ * two would leave the budget filter and the ordering as separate sources of
+ * truth. The rows are then hydrated through Prisma so the provider and image
+ * selects stay in one place.
+ *
+ * `queryVector` is null when the search bar is empty, which is the only case
+ * where recency is the right order: there is no request to be similar to.
+ */
 async function runFilter(
   attempt: FilterAttempt,
   chips: ChipFilters,
+  queryVector: number[] | null,
 ): Promise<ListingWithProvider[]> {
   const { intent } = attempt;
 
@@ -240,31 +256,57 @@ async function runFilter(
   const category = chips.category ?? intent.category;
   const roomType = chips.roomType ?? intent.roomType;
 
-  const where: Record<string, unknown> = { status: "ACTIVE" };
-
-  if (minPrice != null || maxPrice != null) {
-    where.price = {
-      ...(minPrice != null ? { gte: minPrice } : {}),
-      ...(maxPrice != null
-        ? { lte: Math.round(maxPrice * (1 + attempt.pricePadding)) }
-        : {}),
-    };
+  const conditions = [Prisma.sql`"status" = 'ACTIVE'`];
+  if (minPrice != null) {
+    conditions.push(Prisma.sql`"price" >= ${minPrice}`);
   }
-  if (category) where.category = category;
-  if (roomType) where.roomType = roomType;
+  if (maxPrice != null) {
+    conditions.push(
+      Prisma.sql`"price" <= ${Math.round(maxPrice * (1 + attempt.pricePadding))}`,
+    );
+  }
+  if (category) {
+    conditions.push(Prisma.sql`"category"::text = ${category}`);
+  }
+  if (roomType) {
+    conditions.push(Prisma.sql`"roomType"::text = ${roomType}`);
+  }
   if (attempt.useMustHaveTags && intent.mustHaveTags.length > 0) {
-    where.tags = { hasEvery: intent.mustHaveTags };
+    // Compared as text[] so the enum does not have to be cast on the way in.
+    conditions.push(
+      Prisma.sql`"tags"::text[] @> ${intent.mustHaveTags}::text[]`,
+    );
   }
 
-  const listings = await prisma.listing.findMany({
-    where,
+  // NULLS LAST is load-bearing: a listing whose embedding failed or has not
+  // been backfilled yet still has to appear, just below everything that can be
+  // compared. Dropping it would make rows silently vanish from search.
+  const order = queryVector
+    ? Prisma.sql`ORDER BY "embedding" <=> ${toVectorLiteral(queryVector)}::vector ASC NULLS LAST, "createdAt" DESC`
+    : Prisma.sql`ORDER BY "createdAt" DESC`;
+
+  const ordered = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT "id" FROM "Listing"
+    WHERE ${Prisma.join(conditions, " AND ")}
+    ${order}
+    LIMIT ${MAX_ROWS}
+  `;
+  if (ordered.length === 0) return [];
+
+  const ids = ordered.map((row) => row.id);
+  const rows = await prisma.listing.findMany({
+    where: { id: { in: ids } },
     include: {
       provider: { select: { id: true, name: true, image: true } },
       images: LISTING_IMAGE_SELECT,
     },
-    orderBy: { createdAt: "desc" },
-    take: 100,
   });
+
+  // `IN` does not preserve order, so restore the ranking from the first query.
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const listings = ids
+    .map((id) => byId.get(id))
+    .filter((row): row is ListingWithProvider => row != null);
 
   if (attempt.ignoreCommute || intent.maxCommuteMin == null) return listings;
 
@@ -296,6 +338,7 @@ export function commuteMinutes(
 export async function hardFilter(
   intent: SeekerIntent,
   chips: ChipFilters,
+  queryVector: number[] | null,
 ): Promise<{ listings: ListingWithProvider[]; relaxations: string[] }> {
   const attempts: FilterAttempt[] = [
     {
@@ -330,7 +373,7 @@ export async function hardFilter(
 
   const relaxations: string[] = [];
   for (const attempt of attempts) {
-    const listings = await runFilter(attempt, chips);
+    const listings = await runFilter(attempt, chips, queryVector);
     if (listings.length > 0) {
       if (attempt.note) relaxations.push(attempt.note);
       return { listings, relaxations };
@@ -456,8 +499,16 @@ export async function searchListings(
   query: string,
   chips: ChipFilters,
 ): Promise<SearchResult> {
-  const intent = await parseSeekerQuery(query);
-  const { listings, relaxations } = await hardFilter(intent, chips);
+  const trimmed = query.trim();
+
+  // The embedding does not depend on the parse, so the two calls overlap
+  // instead of queueing. Browsing with an empty bar does neither.
+  const [intent, queryVector] = await Promise.all([
+    parseSeekerQuery(query),
+    trimmed ? embedText(trimmed) : Promise.resolve(null),
+  ]);
+
+  const { listings, relaxations } = await hardFilter(intent, chips, queryVector);
   const reasons = generateReasons(intent, listings, query);
   return { intent, listings, reasons, relaxations };
 }

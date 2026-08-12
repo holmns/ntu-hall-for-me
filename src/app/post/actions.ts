@@ -12,6 +12,8 @@ import {
   haversineMeters,
 } from "@/lib/maps";
 import { uploadedImageAlt } from "@/lib/images";
+import { embedAndStoreListing } from "@/lib/embeddings";
+import type { ListingTag } from "@/generated/prisma/enums";
 import {
   fieldErrorsFrom,
   MAX_ADJUST_M,
@@ -102,6 +104,28 @@ export async function createListing(
     },
     select: { id: true },
   });
+
+  // Search orders by this vector, so a listing without one is buried below
+  // every embedded listing no matter how well it fits. That is a silent
+  // failure the provider would never see, so it is rolled back like a failed
+  // photo upload rather than published in a degraded state.
+  try {
+    await embedAndStoreListing(listing.id, {
+      title: data.title,
+      description: data.description,
+      category: data.category,
+      roomType: data.roomType,
+      price: data.price,
+      tags: data.tags as ListingTag[],
+    });
+  } catch (cause) {
+    console.error("[post] embedding failed, rolling back listing:", cause);
+    await prisma.listing.delete({ where: { id: listing.id } });
+    return {
+      error:
+        "Your listing could not be indexed for search, so it was not published. Please try again.",
+    };
+  }
 
   if (pendingImages.length > 0) {
     let uploaded;

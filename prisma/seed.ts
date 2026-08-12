@@ -8,6 +8,11 @@ import type {
   RoomType,
 } from "../src/generated/prisma/enums";
 import { approximateLocation, computeCommute } from "../src/lib/maps";
+import {
+  embedTexts,
+  listingEmbeddingText,
+  storeListingEmbeddings,
+} from "../src/lib/embeddings";
 import { NTU_AREA_PLACES } from "../src/lib/ntu-area-places";
 import { sniffImageType } from "../src/lib/images";
 import {
@@ -460,6 +465,7 @@ async function main() {
   }
   const pickPhotos = createPhotoPicker();
   let photoCount = 0;
+  const embedInputs: { id: string; text: string }[] = [];
 
   console.log(`Seeding ${LISTINGS.length} listings...`);
 
@@ -510,6 +516,8 @@ async function main() {
       select: { id: true },
     });
 
+    embedInputs.push({ id: listing.id, text: listingEmbeddingText(item) });
+
     if (withPhotos) {
       const photos = pickPhotos(item);
       const results = await Promise.all(
@@ -518,6 +526,15 @@ async function main() {
       photoCount += results.filter(Boolean).length;
     }
   }
+
+  // One batched call rather than one per listing. Seeded rows must be embedded
+  // the same way posted ones are, or search would rank the demo data below
+  // anything a provider adds by hand.
+  console.log(`Embedding ${embedInputs.length} listings...`);
+  const vectors = await embedTexts(embedInputs.map((input) => input.text));
+  await storeListingEmbeddings(
+    embedInputs.map((input, index) => ({ id: input.id, vector: vectors[index] })),
+  );
 
   // A demo seeker so the chat thread has a plausible counterparty.
   await prisma.user.upsert({

@@ -146,6 +146,21 @@ model Listing {
   distanceDrivingMin Int
   distanceMeters     Int
 
+  /// Semantic vector over the PUBLIC text only (title, description, tags, room
+  /// type, category, price band) - never the address or coordinates, which are
+  /// gated behind a mutual chat. 1536 dims to match text-embedding-3-small.
+  ///
+  /// Prisma has no native vector type, so this is Unsupported: it cannot be
+  /// selected or written through the client. `src/lib/embeddings.ts` writes it
+  /// with $executeRaw and `runFilter` orders by it with $queryRaw. Nullable
+  /// because a row exists before it is embedded, and rows that fail to embed
+  /// still belong in results - they sort last rather than disappearing.
+  embedding      Unsupported("vector(1536)")?
+  /// Which model produced `embedding`. A model swap changes the vector space,
+  /// so this is what makes stale rows findable instead of silently mismatched.
+  embeddingModel String?
+  embeddedAt     DateTime?
+
   status    ListingStatus @default(ACTIVE)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt

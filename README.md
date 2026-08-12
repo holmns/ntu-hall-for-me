@@ -44,11 +44,18 @@ Maps key must be set before seeding. See `.env.example`.
 
 1. The seeker's sentence goes to an LLM (via OpenRouter) which returns
    structured filters: budget, must-have and nice-to-have tags, room type,
-   travel mode, commute limit, and the leftover nuance ("chill landlord").
-2. Those become a hard Prisma filter. If nothing matches, constraints are
-   relaxed step by step and the user is told what was relaxed.
-3. The surviving candidates go back to the model in a single call, which ranks
-   them and writes a one-line explanation per listing.
+   travel mode, commute limit, and the leftover nuance ("chill landlord"). In
+   parallel, the same sentence is embedded.
+2. Those filters become a hard SQL filter, and the survivors are ordered by
+   cosine distance between the query vector and each listing's vector
+   (pgvector). If nothing matches, constraints are relaxed step by step and the
+   user is told what was relaxed.
+3. The top 10 go to the model in a single call that writes a one-line
+   explanation each. The page does not wait for it: rooms render in their final
+   order and the reasons stream into the cards afterwards.
+
+Listings are embedded when posted or edited, never at search time. Run
+`npm run db:embed` after adding the pgvector migration to an existing database.
 
 Commute times to campus are computed once with the Distance Matrix API when a
 listing is created and cached on the row, so searching never calls a Maps API.
@@ -67,6 +74,7 @@ Postgres/Supabase - NextAuth v5 - Google Maps - OpenRouter
 | `npm run lint` / `typecheck` | ESLint / `tsc --noEmit` |
 | `npm run db:migrate` | Apply migrations |
 | `npm run db:seed` | 20 demo listings |
+| `npm run db:embed` | Embed listings missing a current vector (`-- --all` to redo) |
 | `npm run db:studio` | Prisma Studio |
 | `npm run db:reset` | Drop, re-migrate, re-seed |
 

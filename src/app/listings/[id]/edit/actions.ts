@@ -24,6 +24,13 @@ import {
   uploadPendingImages,
 } from "@/lib/listing-photos";
 import { removeListingImages, type StoredImage } from "@/lib/storage";
+import {
+  EMBEDDING_MODEL,
+  embedText,
+  listingEmbeddingText,
+  toVectorLiteral,
+} from "@/lib/embeddings";
+import type { ListingTag } from "@/generated/prisma/enums";
 
 function imagesError(message: string): ListingFormState {
   return {
@@ -62,6 +69,12 @@ export async function updateListing(
       lat: true,
       lng: true,
       category: true,
+      // Needed to tell whether the embedded text actually changed.
+      title: true,
+      description: true,
+      roomType: true,
+      price: true,
+      tags: true,
       distanceMeters: true,
       distanceWalkingMin: true,
       distanceTransitMin: true,
@@ -160,6 +173,44 @@ export async function updateListing(
   // changed.
   const approx = approximateLocation(point, `${user.id}:${address}`);
 
+  // Same guard as the commute above: re-embedding is a paid round trip, so
+  // compare the text that actually gets embedded rather than assuming any save
+  // changed it. Moving the pin does not, since location is deliberately not
+  // part of the vector.
+  const nextEmbeddingText = listingEmbeddingText({
+    title: data.title,
+    description: data.description,
+    category: data.category,
+    roomType: data.roomType,
+    price: data.price,
+    tags: data.tags as ListingTag[],
+  });
+  const textChanged =
+    nextEmbeddingText !==
+    listingEmbeddingText({
+      title: listing.title,
+      description: listing.description,
+      category: listing.category,
+      roomType: listing.roomType,
+      price: listing.price,
+      tags: listing.tags as ListingTag[],
+    });
+
+  // Before the transaction, so a failed embedding leaves the listing untouched
+  // rather than saved with a vector describing the previous wording.
+  let embedding: number[] | null = null;
+  if (textChanged) {
+    try {
+      embedding = await embedText(nextEmbeddingText);
+    } catch (cause) {
+      console.error("[edit] embedding failed, nothing was changed:", cause);
+      return {
+        error:
+          "Your changes could not be indexed for search, so nothing was saved. Please try again.",
+      };
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Write. Uploads happen first: a failed upload must not leave the listing
   // half-edited.
@@ -227,6 +278,19 @@ export async function updateListing(
         distanceDrivingMin: commute.drivingMin,
       },
     }),
+    // Raw because `embedding` is an Unsupported column. It rides in the same
+    // batch so the row and its vector can never disagree.
+    ...(embedding
+      ? [
+          prisma.$executeRaw`
+            UPDATE "Listing"
+            SET "embedding" = ${toVectorLiteral(embedding)}::vector,
+                "embeddingModel" = ${EMBEDDING_MODEL},
+                "embeddedAt" = NOW()
+            WHERE "id" = ${listing.id}
+          `,
+        ]
+      : []),
     ...(dropped.length > 0
       ? [
           prisma.listingImage.deleteMany({
