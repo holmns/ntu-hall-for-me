@@ -25,27 +25,21 @@ const CACHE_CONTROL = "31536000";
 
 let cachedClient: SupabaseClient | null = null;
 
-function credentials(): { url: string; key: string } | null {
+/**
+ * NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are both required.
+ * There is no "photos disabled" mode: a post form that silently drops its
+ * uploader looks like a missing feature rather than a missing credential, and
+ * it was the last degradation path left in the app.
+ */
+function admin(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  return url && key ? { url, key } : null;
-}
-
-/**
- * Whether photo uploads are available. Follows the same rule as the Maps and
- * OpenRouter keys: without credentials the feature disappears from the UI
- * rather than breaking the page.
- */
-export function hasImageStorage(): boolean {
-  return credentials() !== null;
-}
-
-function admin(): SupabaseClient {
-  const creds = credentials();
-  if (!creds) {
-    throw new Error("Supabase storage is not configured");
+  if (!url || !key) {
+    throw new Error(
+      "NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for listing photos - see .env.example.",
+    );
   }
-  cachedClient ??= createClient(creds.url, creds.key, {
+  cachedClient ??= createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   return cachedClient;
@@ -92,7 +86,7 @@ export async function uploadListingImage(
  * that triggered the rollback.
  */
 export async function removeListingImages(paths: string[]): Promise<void> {
-  if (paths.length === 0 || !hasImageStorage()) return;
+  if (paths.length === 0) return;
   try {
     await admin().storage.from(LISTING_IMAGE_BUCKET).remove(paths);
   } catch (error) {
@@ -105,7 +99,6 @@ export async function removeListingImages(paths: string[]): Promise<void> {
  * would otherwise leave their objects behind on each re-seed.
  */
 export async function clearListingImages(): Promise<number> {
-  if (!hasImageStorage()) return 0;
   const client = admin();
   let removed = 0;
 

@@ -59,7 +59,6 @@ export function ListingForm({
   hidden,
   values = BLANK_LISTING,
   initialImages = [],
-  imagesEnabled = true,
   submitLabel,
   pendingLabel,
   footerNote,
@@ -73,7 +72,6 @@ export function ListingForm({
   hidden?: Record<string, string>;
   values?: ListingFormValues;
   initialImages?: ListingImageView[];
-  imagesEnabled?: boolean;
   submitLabel: string;
   pendingLabel: string;
   footerNote?: React.ReactNode;
@@ -228,22 +226,20 @@ export function ListingForm({
         )}
       </Section>
 
-      {imagesEnabled && (
-        <Section
-          title="Photos"
-          subtitle="Optional, but a listing with photos gets opened far more often. Show the actual room rather than the estate."
-        >
-          <ImageUploader
-            initial={initialImages}
-            onBusyChange={setImagesBusy}
-            error={state.fieldErrors?.images}
-          />
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900">
-            Photos are public straight away, unlike your address. Avoid shots
-            that show your block number, unit plate or letterbox.
-          </p>
-        </Section>
-      )}
+      <Section
+        title="Photos"
+        subtitle="Optional, but a listing with photos gets opened far more often. Show the actual room rather than the estate."
+      >
+        <ImageUploader
+          initial={initialImages}
+          onBusyChange={setImagesBusy}
+          error={state.fieldErrors?.images}
+        />
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900">
+          Photos are public straight away, unlike your address. Avoid shots that
+          show your block number, unit plate or letterbox.
+        </p>
+      </Section>
 
       <Section
         title="Tags"

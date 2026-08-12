@@ -4,7 +4,6 @@ import { notFound, redirect } from "next/navigation";
 import { EditListingForm } from "@/components/edit-listing-form";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { hasImageStorage } from "@/lib/storage";
 import { LISTING_IMAGE_SELECT } from "@/lib/images";
 import type { ListingTag } from "@/generated/prisma/enums";
 import { setListingStatus } from "./actions";
@@ -58,7 +57,6 @@ export default async function EditListingPage(
 
       <EditListingForm
         listingId={listing.id}
-        imagesEnabled={hasImageStorage()}
         initialImages={listing.images}
         values={{
           title: listing.title,

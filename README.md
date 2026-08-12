@@ -26,7 +26,7 @@ npm run dev
 
 Open http://localhost:3000.
 
-**Three API integrations are required and have no fallback.** Set them in
+**Every external integration is required and has no fallback.** Set them in
 `.env` before the first run:
 
 | Key | Needed for |
@@ -34,6 +34,7 @@ Open http://localhost:3000.
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | The only way to sign in |
 | `OPENROUTER_API_KEY` | Reading the seeker's sentence and ranking rooms |
 | `GOOGLE_MAPS_API_KEY` / `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Address lookup, the commute to campus, and the maps |
+| `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Listing photos |
 
 Without them the app does not degrade to keyword search, demo sign-in or
 estimated commute times - those paths are gone, and each integration fails

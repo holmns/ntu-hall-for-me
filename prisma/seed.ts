@@ -15,11 +15,7 @@ import {
 } from "../src/lib/embeddings";
 import { NTU_AREA_PLACES } from "../src/lib/ntu-area-places";
 import { sniffImageType } from "../src/lib/images";
-import {
-  clearListingImages,
-  hasImageStorage,
-  uploadListingImage,
-} from "../src/lib/storage";
+import { clearListingImages, uploadListingImage } from "../src/lib/storage";
 import {
   createPhotoPicker,
   photoUrl,
@@ -452,17 +448,8 @@ async function main() {
   await prisma.user.deleteMany({ where: { email: { contains: "@demo." } } });
 
   // Listing rows are gone, so their objects in the bucket are orphans now.
-  if (hasImageStorage()) {
-    const removed = await clearListingImages();
-    if (removed > 0) console.log(`Removed ${removed} orphaned images.`);
-  }
-
-  const withPhotos = hasImageStorage();
-  if (!withPhotos) {
-    console.warn(
-      "No Supabase storage credentials - seeding listings without photos.",
-    );
-  }
+  const removed = await clearListingImages();
+  if (removed > 0) console.log(`Removed ${removed} orphaned images.`);
   const pickPhotos = createPhotoPicker();
   let photoCount = 0;
   const embedInputs: { id: string; text: string }[] = [];
@@ -518,13 +505,11 @@ async function main() {
 
     embedInputs.push({ id: listing.id, text: listingEmbeddingText(item) });
 
-    if (withPhotos) {
-      const photos = pickPhotos(item);
-      const results = await Promise.all(
-        photos.map((photo, index) => attachPhoto(listing.id, photo, index)),
-      );
-      photoCount += results.filter(Boolean).length;
-    }
+    const photos = pickPhotos(item);
+    const results = await Promise.all(
+      photos.map((photo, index) => attachPhoto(listing.id, photo, index)),
+    );
+    photoCount += results.filter(Boolean).length;
   }
 
   // One batched call rather than one per listing. Seeded rows must be embedded

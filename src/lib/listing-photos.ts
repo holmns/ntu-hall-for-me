@@ -6,7 +6,6 @@ import {
   type AcceptedImageType,
 } from "./images";
 import {
-  hasImageStorage,
   removeListingImages,
   uploadListingImage,
   type StoredImage,
@@ -57,11 +56,6 @@ export async function readNewImages(
     .filter((entry): entry is File => entry instanceof File && entry.size > 0);
   if (files.length === 0) return [];
 
-  if (!hasImageStorage()) {
-    throw new ImageInputError(
-      "Photo uploads are not configured on this deployment.",
-    );
-  }
   // Never let a missing or short slot list wave the cap through.
   if (Math.max(total, files.length) > MAX_IMAGES_PER_LISTING) {
     throw new ImageInputError(

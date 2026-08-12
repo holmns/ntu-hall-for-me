@@ -10,12 +10,10 @@ export function EditListingForm({
   listingId,
   values,
   initialImages,
-  imagesEnabled = true,
 }: {
   listingId: string;
   values: ListingFormValues;
   initialImages: ListingImageView[];
-  imagesEnabled?: boolean;
 }) {
   return (
     <ListingForm
@@ -25,7 +23,6 @@ export function EditListingForm({
       hidden={{ listingId }}
       values={values}
       initialImages={initialImages}
-      imagesEnabled={imagesEnabled}
       submitLabel="Save changes"
       pendingLabel="Saving..."
       secondary={

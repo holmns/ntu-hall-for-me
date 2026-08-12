@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 
 import { PostListingForm } from "@/components/post-listing-form";
 import { getCurrentUser } from "@/lib/auth";
-import { hasImageStorage } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +19,7 @@ export default async function PostPage() {
         so the description matters more than the checkboxes.
       </p>
 
-      <PostListingForm imagesEnabled={hasImageStorage()} />
+      <PostListingForm />
     </div>
   );
 }
