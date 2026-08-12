@@ -36,12 +36,12 @@ export function AddressAutocomplete({
   // Debounced lookup.
   useEffect(() => {
     if (selected?.address === query) return;
-    if (query.trim().length < 2) {
-      setSuggestions([]);
-      return;
-    }
     const controller = new AbortController();
     const timer = setTimeout(async () => {
+      if (query.trim().length < 2) {
+        setSuggestions([]);
+        return;
+      }
       setLoading(true);
       try {
         const res = await fetch(

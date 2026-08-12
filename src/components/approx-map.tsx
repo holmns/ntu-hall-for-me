@@ -4,6 +4,23 @@ import { useEffect, useRef, useState } from "react";
 
 const NTU = { lat: 1.3483, lng: 103.6831 };
 
+/**
+ * Minimal structural type for the slice of the Maps JS API used here, so we
+ * avoid pulling in @types/google.maps for one map.
+ */
+type MapsApi = {
+  maps: {
+    Map: new (el: HTMLElement, opts: Record<string, unknown>) => object;
+    Marker: new (opts: Record<string, unknown>) => object;
+    Circle: new (opts: Record<string, unknown>) => object;
+    SymbolPath: { CIRCLE: unknown };
+  };
+};
+
+function getMapsApi(): MapsApi | null {
+  return (globalThis as { google?: MapsApi }).google ?? null;
+}
+
 let mapsLoader: Promise<void> | null = null;
 
 /** Loads the Maps JS API once per page, shared across component instances. */
@@ -11,8 +28,7 @@ function loadMapsApi(apiKey: string): Promise<void> {
   if (mapsLoader) return mapsLoader;
   mapsLoader = new Promise<void>((resolve, reject) => {
     if (typeof window === "undefined") return reject(new Error("no window"));
-    const w = window as unknown as { google?: { maps?: unknown } };
-    if (w.google?.maps) return resolve();
+    if (getMapsApi()?.maps) return resolve();
 
     const script = document.createElement("script");
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=maps&loading=async`;
@@ -38,22 +54,20 @@ export function ApproxMap({
   exact?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "unavailable">(
-    "loading",
-  );
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  // Derived, not set in an effect: without a key the map can never load.
+  const [status, setStatus] = useState<"loading" | "ready" | "unavailable">(
+    apiKey ? "loading" : "unavailable",
+  );
 
   useEffect(() => {
-    if (!apiKey) {
-      setStatus("unavailable");
-      return;
-    }
+    if (!apiKey) return;
     let cancelled = false;
 
     loadMapsApi(apiKey)
       .then(() => {
-        if (cancelled || !ref.current) return;
-        const g = (window as unknown as { google: any }).google;
+        const g = getMapsApi();
+        if (cancelled || !ref.current || !g) return;
 
         const map = new g.maps.Map(ref.current, {
           center: { lat, lng },

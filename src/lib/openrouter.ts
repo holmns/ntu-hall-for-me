@@ -5,8 +5,14 @@
  * a JSON object back and parses it defensively - a hackathon-grade guard
  * against models that wrap JSON in prose or code fences.
  */
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "anthropic/claude-3.5-haiku";
+
+/** Overridable so a proxy (or a local mock in tests) can stand in. */
+function completionsUrl(): string {
+  const base = process.env.OPENROUTER_BASE_URL?.trim() || DEFAULT_BASE_URL;
+  return `${base.replace(/\/$/, "")}/chat/completions`;
+}
 
 export function hasOpenRouterKey(): boolean {
   return Boolean(process.env.OPENROUTER_API_KEY?.trim());
@@ -32,7 +38,7 @@ export async function chatJson<T>({
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch(OPENROUTER_URL, {
+    const res = await fetch(completionsUrl(), {
       method: "POST",
       signal: controller.signal,
       headers: {
