@@ -2,9 +2,26 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { loadMapClasses, type GMap, type GOverlay } from "@/lib/maps-client";
+import {
+  DEFAULT_MAP_ID,
+  loadMapClasses,
+  toLatLngLiteral,
+  type GAdvancedMarker,
+  type GMap,
+} from "@/lib/maps-client";
 
 const NTU = { lat: 1.3483, lng: 103.6831 };
+
+function ntuMarkerDot(): HTMLElement {
+  const dot = document.createElement("div");
+  dot.style.width = "12px";
+  dot.style.height = "12px";
+  dot.style.borderRadius = "50%";
+  dot.style.backgroundColor = "#0f766e";
+  dot.style.border = "2px solid #ffffff";
+  dot.style.boxShadow = "0 0 0 1px rgba(0, 0, 0, 0.15)";
+  return dot;
+}
 
 /**
  * Draggable pin for fine-tuning a listing's exact location.
@@ -28,7 +45,7 @@ export function LocationPicker({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<GMap | null>(null);
-  const markerRef = useRef<GOverlay | null>(null);
+  const markerRef = useRef<GAdvancedMarker | null>(null);
   // Kept in a ref so the map is built once and never rebuilt when the parent
   // re-renders with a new callback identity.
   const onChangeRef = useRef(onChange);
@@ -48,13 +65,14 @@ export function LocationPicker({
     let cancelled = false;
 
     loadMapClasses(apiKey)
-      .then(({ Map, Marker, SymbolPath }) => {
+      .then(({ Map, AdvancedMarkerElement }) => {
         if (cancelled || !ref.current) return;
 
         const start = value ?? NTU;
         const map = new Map(ref.current, {
           center: start,
           zoom: value ? 17 : 13,
+          mapId: DEFAULT_MAP_ID,
           disableDefaultUI: true,
           zoomControl: true,
           streetViewControl: false,
@@ -62,35 +80,34 @@ export function LocationPicker({
         });
         mapRef.current = map;
 
-        const marker = new Marker({
+        const marker = new AdvancedMarkerElement({
           map,
           position: start,
-          draggable: true,
+          gmpDraggable: true,
           title: "Drag to the exact block",
         });
         markerRef.current = marker;
 
-        const commit = (e: { latLng: { lat: () => number; lng: () => number } }) => {
-          const point = { lat: e.latLng.lat(), lng: e.latLng.lng() };
-          marker.setPosition(point);
+        const commit = (point: { lat: number; lng: number }) => {
+          marker.position = point;
           setMoved(true);
           onChangeRef.current(point, true);
         };
-        marker.addListener("dragend", commit);
-        map.addListener("click", commit);
+        // Advanced markers move themselves during a drag; the dragend event
+        // carries no latLng, so read the marker's own position back instead.
+        marker.addListener("dragend", () => {
+          const point = toLatLngLiteral(marker.position);
+          if (point) commit(point);
+        });
+        map.addListener("click", (e) => {
+          commit({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+        });
 
-        new Marker({
+        new AdvancedMarkerElement({
           map,
           position: NTU,
           title: "NTU main campus",
-          icon: {
-            path: SymbolPath.CIRCLE,
-            scale: 6,
-            fillColor: "#0f766e",
-            fillOpacity: 1,
-            strokeColor: "#ffffff",
-            strokeWeight: 2,
-          },
+          content: ntuMarkerDot(),
         });
 
         setStatus("ready");
@@ -111,7 +128,7 @@ export function LocationPicker({
   // Recentre when a new address is chosen from autocomplete.
   useEffect(() => {
     if (!value || !mapRef.current || !markerRef.current) return;
-    markerRef.current.setPosition(value);
+    markerRef.current.position = value;
     mapRef.current.panTo(value);
     mapRef.current.setZoom(17);
     setMoved(false);
