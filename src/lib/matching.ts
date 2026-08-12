@@ -43,20 +43,30 @@ export type ListingWithProvider = Listing & {
   images: ListingImageView[];
 };
 
-export type RankedListing = {
-  listing: ListingWithProvider;
-  score: number;
-  reason: string;
-};
+/** Listing id -> the one-line explanation shown on its card. */
+export type ReasonMap = Map<string, string>;
 
 export type SearchResult = {
   intent: SeekerIntent;
-  results: RankedListing[];
+  listings: ListingWithProvider[];
+  /**
+   * Reasons for the first REASON_LIMIT listings, deliberately NOT awaited by
+   * `searchListings`. The results page renders the list from the database
+   * order and lets this resolve into per-card Suspense boundaries, so the one
+   * slow LLM call never delays the rooms themselves.
+   */
+  reasons: Promise<ReasonMap>;
   /** Human-readable notes about constraints we had to relax to find anything. */
   relaxations: string[];
 };
 
-const MAX_CANDIDATES = 25;
+/**
+ * How many listings get a written reason. Reasons are the expensive part of the
+ * pipeline: the model emits ~45 tokens per listing and LLM latency is dominated
+ * by generation, so asking for 10 instead of every result is most of the cost.
+ * Cards past this render without one, exactly as they already do today.
+ */
+export const REASON_LIMIT = 10;
 
 // ---------------------------------------------------------------------------
 // Layer 1: natural language -> structured filters
@@ -332,32 +342,37 @@ export async function hardFilter(
 }
 
 // ---------------------------------------------------------------------------
-// Layer 2: LLM ranking with a one-line explanation per listing
+// Layer 2: a one-line explanation for the listings the seeker actually sees
+//
+// This layer no longer decides the order. The order is the database order from
+// `hardFilter`, which is where semantic (vector) ordering belongs once it
+// exists - see the ORDER BY in `runFilter`. Keeping ordering out of the model
+// is what lets the results page render before this call finishes: a reason
+// arriving late only fills in a card, it never moves one.
 // ---------------------------------------------------------------------------
 
-const rankingSchema = z.object({
-  ranking: z.array(
+const reasonsSchema = z.object({
+  reasons: z.array(
     z.object({
       id: z.string(),
-      score: z.number(),
       reason: z.string(),
     }),
   ),
 });
 
-const RANK_SYSTEM_PROMPT = `You rank room listings for a student looking for housing near NTU Singapore.
+const REASON_SYSTEM_PROMPT = `You explain why each room listing fits a student looking for housing near NTU Singapore.
 
-You get the seeker's request and a numbered list of candidate listings that ALREADY passed the hard filters (budget, tags, category). Your job is to order them by how well they fit the seeker's stated preferences and the nuance in their wording.
+You get the seeker's request and the listings that were shown to them, already filtered and already in their final display order. Do NOT reorder them and do not judge which is best - write one short explanation per listing.
 
 Return ONLY JSON:
-{"ranking": [{"id": "<listing id>", "score": <0-100>, "reason": "<max 18 words>"}]}
+{"reasons": [{"id": "<listing id>", "reason": "<max 18 words>"}]}
 
 Rules:
-- Include EVERY candidate id exactly once, best fit first.
+- Include EVERY listing id exactly once, in the order you received them.
 - reason must be concrete and specific to that listing: cite the budget fit, the commute, a tag, or a phrase from the description. Write it addressed to the seeker, e.g. "Within budget, 17 min by bus, landlord mentions keeping the flat quiet".
 - Never invent facts that are not in the listing data.
-- ON_CAMPUS listings are already on campus, so their commute is 0 by definition. Do NOT rank them highly just for being close - judge them on price, room type, tags and description like anything else.
-- Prefer listings whose description genuinely reflects the seeker's nuance over ones that merely have the right tags.`;
+- ON_CAMPUS listings are already on campus, so their commute is 0 by definition. Say so plainly rather than describing it as a short trip.
+- Prefer citing the part of the description that genuinely reflects the seeker's wording over simply listing tags.`;
 
 function candidatePayload(
   listings: ListingWithProvider[],
@@ -375,85 +390,74 @@ function candidatePayload(
       l.category === "ON_CAMPUS"
         ? "on campus"
         : `${commuteMinutes(l, mode)} min by ${mode}`,
-    // Truncated to keep one ranking call cheap and fast.
+    // Truncated to keep the call cheap and fast.
     description: l.description.slice(0, 400),
   }));
 }
 
-/** Throws if OpenRouter is unreachable - the caller renders an error state. */
-export async function rankListings(
+/**
+ * One LLM call for the first REASON_LIMIT listings. Rejects if OpenRouter is
+ * unreachable; the caller decides what a failed reason looks like, because by
+ * then the rooms are already on screen and taking the page down over a missing
+ * caption would be worse than the caption.
+ */
+export async function generateReasons(
   intent: SeekerIntent,
   listings: ListingWithProvider[],
   originalQuery: string,
-): Promise<RankedListing[]> {
-  if (listings.length === 0) return [];
-
-  // Browsing with an empty search bar: there is nothing to rank against, and
-  // the results page hides reasons and rank numbers without a query. Ranking
-  // here would spend an LLM call and its latency on output that is discarded,
-  // so keep the query order (newest first) instead.
-  if (!originalQuery.trim() && !intent.nuance.trim()) {
-    return listings.map((listing) => ({ listing, score: 0, reason: "" }));
+): Promise<ReasonMap> {
+  // Browsing with an empty search bar: there is no request to explain a fit
+  // against, and the results page hides reasons without a query. Skip the call
+  // rather than spend its latency on output that is discarded.
+  if (listings.length === 0 || (!originalQuery.trim() && !intent.nuance.trim())) {
+    return new Map();
   }
 
-  const candidates = listings.slice(0, MAX_CANDIDATES);
-  const overflow = listings.slice(MAX_CANDIDATES);
+  const described = listings.slice(0, REASON_LIMIT);
 
   const raw = await chatJson<unknown>({
-    system: RANK_SYSTEM_PROMPT,
+    system: REASON_SYSTEM_PROMPT,
     user: JSON.stringify({
       seekerQuery: originalQuery,
       seekerNuance: intent.nuance,
       budget: { min: intent.minPrice, max: intent.maxPrice },
       preferredTravelMode: intent.travelMode ?? "transit",
       niceToHave: intent.niceToHaveTags,
-      candidates: candidatePayload(candidates, intent),
+      listings: candidatePayload(described, intent),
     }),
-    maxTokens: 2000,
+    // REASON_LIMIT entries at ~45 tokens each, with headroom.
+    maxTokens: 800,
   });
 
-  const parsed = rankingSchema.parse(raw);
-  const byId = new Map(candidates.map((l) => [l.id, l]));
-  const ranked: RankedListing[] = [];
-  const seen = new Set<string>();
+  const parsed = reasonsSchema.parse(raw);
+  const known = new Set(described.map((l) => l.id));
+  const reasons: ReasonMap = new Map();
 
-  for (const entry of parsed.ranking) {
-    const listing = byId.get(entry.id);
-    if (!listing || seen.has(entry.id)) continue;
-    seen.add(entry.id);
-    ranked.push({
-      listing,
-      score: clampScore(entry.score),
-      reason: entry.reason.trim(),
-    });
+  for (const entry of parsed.reasons) {
+    const reason = entry.reason.trim();
+    // Ignore ids the model invented or repeated. A listing the model skips
+    // simply renders without a reason, which the card already handles.
+    if (!known.has(entry.id) || reasons.has(entry.id) || !reason) continue;
+    reasons.set(entry.id, reason);
   }
 
-  // Listings the model dropped, plus everything past MAX_CANDIDATES that was
-  // never sent to it, still deserve to appear - just below the ranked ones and
-  // without an invented reason. They keep their query order (newest first).
-  const unranked = [...candidates.filter((l) => !seen.has(l.id)), ...overflow];
-  ranked.push(
-    ...unranked.map((listing) => ({ listing, score: 0, reason: "" })),
-  );
-
-  return ranked;
-}
-
-function clampScore(score: number): number {
-  if (!Number.isFinite(score)) return 50;
-  return Math.max(0, Math.min(100, Math.round(score)));
+  return reasons;
 }
 
 // ---------------------------------------------------------------------------
 // Orchestration
 // ---------------------------------------------------------------------------
 
+/**
+ * Awaits everything the page needs to render rooms, and nothing else. The
+ * reasons promise is returned unawaited on purpose - see `SearchResult`.
+ */
 export async function searchListings(
   query: string,
   chips: ChipFilters,
 ): Promise<SearchResult> {
   const intent = await parseSeekerQuery(query);
   const { listings, relaxations } = await hardFilter(intent, chips);
-  const results = await rankListings(intent, listings, query);
-  return { intent, results, relaxations };
+  const reasons = generateReasons(intent, listings, query);
+  return { intent, listings, reasons, relaxations };
 }

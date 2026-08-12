@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { CATEGORY_LABELS, ROOM_TYPE_LABELS, TAG_LABELS } from "@/lib/constants";
 import { commuteMinutes, type TravelMode } from "@/lib/matching";
@@ -93,6 +94,28 @@ function CardCover({ listing }: { listing: ListingWithProvider }) {
   );
 }
 
+/**
+ * The highlighted "why this room" line. Exported so the caller owns whether it
+ * renders at all: reasons arrive after the card does, so the search page passes
+ * a Suspense boundary here, and a listing the model skipped renders nothing
+ * rather than an empty pill.
+ */
+export function ReasonPill({ children }: { children: ReactNode }) {
+  return (
+    <p className="mt-3 flex gap-2 rounded-lg bg-brand-soft/70 px-3 py-2 text-[13px] leading-relaxed text-ink-soft">
+      <svg
+        viewBox="0 0 16 16"
+        className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand"
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        <path d="M8 0.5l1.9 4.3 4.6.5-3.4 3.1 1 4.6L8 10.7l-4.1 2.3 1-4.6L1.5 5.3l4.6-.5L8 .5Z" />
+      </svg>
+      <span className="min-w-0 flex-1">{children}</span>
+    </p>
+  );
+}
+
 export function ListingCard({
   listing,
   reason,
@@ -100,7 +123,8 @@ export function ListingCard({
   mode = "transit",
 }: {
   listing: ListingWithProvider;
-  reason?: string;
+  /** Already wrapped in `ReasonPill` by the caller, or absent. */
+  reason?: ReactNode;
   rank?: number;
   mode?: TravelMode;
 }) {
@@ -140,19 +164,7 @@ export function ListingCard({
             <CommuteBadge listing={listing} mode={mode} />
           </div>
 
-          {reason && (
-            <p className="mt-3 flex gap-2 rounded-lg bg-brand-soft/70 px-3 py-2 text-[13px] leading-relaxed text-ink-soft">
-              <svg
-                viewBox="0 0 16 16"
-                className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path d="M8 0.5l1.9 4.3 4.6.5-3.4 3.1 1 4.6L8 10.7l-4.1 2.3 1-4.6L1.5 5.3l4.6-.5L8 .5Z" />
-              </svg>
-              <span>{reason}</span>
-            </p>
-          )}
+          {reason}
 
           {tags.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">

@@ -84,7 +84,7 @@ export function IntentPanel({
 
         <p className="mt-3 border-t border-line pt-3 text-[12px] text-ink-faint">
           {count} {count === 1 ? "room passed" : "rooms passed"} the hard
-          filters and {count === 1 ? "was" : "were"} ranked by the model.
+          filters.
         </p>
       </div>
     </div>

@@ -1,10 +1,23 @@
 import { Suspense } from "react";
 
 import { SearchBar } from "@/components/search-bar";
-import { ListingCard } from "@/components/listing-card";
+import { ListingCard, ReasonPill } from "@/components/listing-card";
 import { IntentPanel } from "@/components/intent-panel";
-import { searchListings, type ChipFilters } from "@/lib/matching";
+import {
+  REASON_LIMIT,
+  searchListings,
+  type ChipFilters,
+  type ReasonMap,
+} from "@/lib/matching";
 import type { ListingCategory, RoomType } from "@/generated/prisma/enums";
+
+/**
+ * Resolved form of the reasons promise. The rejection is folded into a value
+ * rather than left to throw: by the time reasons resolve the rooms are already
+ * on screen, and letting a failed caption bubble to the route's error boundary
+ * would replace a perfectly good result list with an error page.
+ */
+type ReasonState = { ok: true; reasons: ReasonMap } | { ok: false };
 
 export const dynamic = "force-dynamic";
 
@@ -68,12 +81,25 @@ async function Results({
   query: string;
   chips: ChipFilters;
 }) {
-  const { intent, results, relaxations } = await searchListings(query, chips);
+  const { intent, listings, reasons, relaxations } = await searchListings(
+    query,
+    chips,
+  );
   const mode = intent.travelMode ?? "transit";
+
+  // Settled once, here, so all the card boundaries below share a single call
+  // and a failure becomes data instead of a thrown error.
+  const reasonState: Promise<ReasonState> = reasons.then(
+    (map) => ({ ok: true as const, reasons: map }),
+    (error) => {
+      console.error("[search] reasons failed:", error);
+      return { ok: false as const };
+    },
+  );
 
   return (
     <div className="mt-6">
-      {query.trim() && <IntentPanel intent={intent} count={results.length} />}
+      {query.trim() && <IntentPanel intent={intent} count={listings.length} />}
 
       {relaxations.length > 0 && (
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
@@ -82,14 +108,20 @@ async function Results({
         </div>
       )}
 
+      {query.trim() && listings.length > 0 && (
+        <Suspense fallback={null}>
+          <ReasonFailureNotice state={reasonState} />
+        </Suspense>
+      )}
+
       <div className="mt-4 flex items-baseline justify-between gap-4">
         <h2 className="text-sm font-medium text-ink-soft">
-          {results.length} {results.length === 1 ? "room" : "rooms"}
-          {query.trim() ? " ranked for you" : ""}
+          {listings.length} {listings.length === 1 ? "room" : "rooms"}
+          {query.trim() ? " for you" : ""}
         </h2>
       </div>
 
-      {results.length === 0 ? (
+      {listings.length === 0 ? (
         <div className="card mt-3 px-6 py-14 text-center">
           <p className="text-[15px] font-medium text-ink">No rooms found</p>
           <p className="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-ink-soft">
@@ -99,17 +131,70 @@ async function Results({
         </div>
       ) : (
         <div className="mt-3 grid gap-3">
-          {results.map((result, index) => (
+          {listings.map((listing, index) => (
             <ListingCard
-              key={result.listing.id}
-              listing={result.listing}
-              reason={query.trim() ? result.reason : undefined}
+              key={listing.id}
+              listing={listing}
+              // Only the listings that got sent for a reason reserve space for
+              // one. The rest render exactly as they do when browsing.
+              reason={
+                query.trim() && index < REASON_LIMIT ? (
+                  <Suspense fallback={<ReasonSkeleton />}>
+                    <Reason state={reasonState} listingId={listing.id} />
+                  </Suspense>
+                ) : undefined
+              }
               rank={query.trim() ? index + 1 : undefined}
               mode={mode}
             />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Streams in once the reasons call resolves. Renders nothing until then. */
+async function Reason({
+  state,
+  listingId,
+}: {
+  state: Promise<ReasonState>;
+  listingId: string;
+}) {
+  const settled = await state;
+  if (!settled.ok) return null;
+
+  const reason = settled.reasons.get(listingId);
+  if (!reason) return null;
+
+  return <ReasonPill>{reason}</ReasonPill>;
+}
+
+/** Holds the reason's place so the card does not resize when one arrives. */
+function ReasonSkeleton() {
+  return (
+    <ReasonPill>
+      <span className="block h-3.5 w-3/5 animate-pulse rounded bg-brand/15" />
+    </ReasonPill>
+  );
+}
+
+/**
+ * Says so when the reasons call failed. Shown once above the list rather than
+ * repeated on ten cards, and never as a silent absence - a missing explanation
+ * should read as a failure, not as "no reason to give".
+ */
+async function ReasonFailureNotice({ state }: { state: Promise<ReasonState> }) {
+  const settled = await state;
+  if (settled.ok) return null;
+
+  return (
+    <div className="mt-4 rounded-xl border border-line bg-surface-muted px-4 py-3 text-[13px] text-ink-soft">
+      <span className="font-medium text-ink">
+        Could not write the match explanations.
+      </span>{" "}
+      These rooms all match your filters; only the per-room reasons are missing.
     </div>
   );
 }
@@ -121,7 +206,7 @@ function ResultsSkeleton({ query }: { query: string }) {
         <span className="h-2 w-2 animate-pulse rounded-full bg-brand" />
         <span className="text-[13px] text-ink-soft">
           {query.trim()
-            ? "Reading your request and ranking rooms..."
+            ? "Reading your request and finding rooms..."
             : "Loading rooms..."}
         </span>
       </div>
