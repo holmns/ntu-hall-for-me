@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 
 import { AddressAutocomplete } from "./address-autocomplete";
+import { ImageUploader } from "./image-uploader";
 import { createListing, type PostListingState } from "@/app/post/actions";
 import { findLocationDetails } from "@/lib/redaction";
 import {
@@ -16,13 +17,20 @@ import type { ListingCategory, RoomType } from "@/generated/prisma/enums";
 
 const initialState: PostListingState = {};
 
-export function PostListingForm() {
+export function PostListingForm({
+  imagesEnabled = true,
+}: {
+  imagesEnabled?: boolean;
+}) {
   const [state, formAction, isPending] = useActionState(
     createListing,
     initialState,
   );
   const [category, setCategory] = useState<ListingCategory>("OFF_CAMPUS");
   const [freeText, setFreeText] = useState({ title: "", description: "" });
+  // Photos are still being resized in the browser; submitting now would post a
+  // half-empty file input.
+  const [imagesBusy, setImagesBusy] = useState(false);
 
   // Warn before publishing rather than silently redacting later.
   const leaks = findLocationDetails(`${freeText.title}\n${freeText.description}`);
@@ -143,6 +151,22 @@ export function PostListingForm() {
         )}
       </Section>
 
+      {imagesEnabled && (
+        <Section
+          title="Photos"
+          subtitle="Optional, but a listing with photos gets opened far more often. Show the actual room rather than the estate."
+        >
+          <ImageUploader
+            onBusyChange={setImagesBusy}
+            error={state.fieldErrors?.images}
+          />
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900">
+            Photos are public straight away, unlike your address. Avoid shots
+            that show your block number, unit plate or letterbox.
+          </p>
+        </Section>
+      )}
+
       <Section
         title="Tags"
         subtitle="Tick everything that genuinely applies. These are used as hard filters when seekers search."
@@ -177,8 +201,16 @@ export function PostListingForm() {
       </Section>
 
       <div className="flex items-center gap-3 border-t border-line pt-5">
-        <button type="submit" disabled={isPending} className="btn-primary">
-          {isPending ? "Publishing..." : "Publish listing"}
+        <button
+          type="submit"
+          disabled={isPending || imagesBusy}
+          className="btn-primary"
+        >
+          {isPending
+            ? "Publishing..."
+            : imagesBusy
+              ? "Preparing photos..."
+              : "Publish listing"}
         </button>
         <p className="text-xs text-ink-faint">
           You can deactivate it later from your listings.

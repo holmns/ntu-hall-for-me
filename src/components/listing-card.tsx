@@ -49,6 +49,50 @@ export function CommuteBadge({
   );
 }
 
+/**
+ * Cover thumbnail, or a neutral placeholder so a listing without photos still
+ * lines up with the ones that have them.
+ */
+function CardCover({ listing }: { listing: ListingWithProvider }) {
+  const cover = listing.images[0];
+  const box =
+    "h-[72px] w-24 shrink-0 overflow-hidden rounded-lg border border-line sm:h-24 sm:w-32";
+
+  if (!cover) {
+    return (
+      <div className={`${box} grid place-items-center bg-surface-muted`}>
+        <svg
+          viewBox="0 0 24 24"
+          className="h-6 w-6 text-line-strong"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden="true"
+        >
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <circle cx="8.5" cy="10" r="1.5" />
+          <path d="m4 17 4.5-4.5L12 16l3-3 5 5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${box} bg-surface-muted`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={cover.url}
+        alt={cover.alt}
+        width={cover.width}
+        height={cover.height}
+        loading="lazy"
+        decoding="async"
+        className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+      />
+    </div>
+  );
+}
+
 export function ListingCard({
   listing,
   reason,
@@ -73,6 +117,7 @@ export function ListingCard({
             {rank}
           </span>
         )}
+        <CardCover listing={listing} />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-4">
             {/* Cards are always a public view, so the title is always redacted. */}

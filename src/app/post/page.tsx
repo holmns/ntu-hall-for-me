@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { PostListingForm } from "@/components/post-listing-form";
 import { getCurrentUser } from "@/lib/auth";
 import { hasMapsKey } from "@/lib/maps";
+import { hasImageStorage } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ export default async function PostPage() {
         </div>
       )}
 
-      <PostListingForm />
+      <PostListingForm imagesEnabled={hasImageStorage()} />
     </div>
   );
 }

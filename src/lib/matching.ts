@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "./prisma";
 import { chatJson, hasOpenRouterKey } from "./openrouter";
 import { ALL_TAGS, TAG_LABELS } from "./constants";
+import { LISTING_IMAGE_SELECT, type ListingImageView } from "./images";
 import type {
   ListingCategory,
   ListingTag,
@@ -39,6 +40,8 @@ export type ChipFilters = {
 
 export type ListingWithProvider = Listing & {
   provider: { id: string; name: string | null; image: string | null };
+  /** Ordered by `position`, so `images[0]` is the cover. */
+  images: ListingImageView[];
 };
 
 export type RankedListing = {
@@ -315,7 +318,10 @@ async function runFilter(
 
   const listings = await prisma.listing.findMany({
     where,
-    include: { provider: { select: { id: true, name: true, image: true } } },
+    include: {
+      provider: { select: { id: true, name: true, image: true } },
+      images: LISTING_IMAGE_SELECT,
+    },
     orderBy: { createdAt: "desc" },
     take: 100,
   });

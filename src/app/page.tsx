@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SearchBar } from "@/components/search-bar";
 import { ListingCard } from "@/components/listing-card";
 import { prisma } from "@/lib/prisma";
+import { LISTING_IMAGE_SELECT } from "@/lib/images";
 
 export default async function HomePage() {
   const [total, onCampus, cheapest, recent] = await Promise.all([
@@ -15,7 +16,10 @@ export default async function HomePage() {
     }),
     prisma.listing.findMany({
       where: { status: "ACTIVE" },
-      include: { provider: { select: { id: true, name: true, image: true } } },
+      include: {
+        provider: { select: { id: true, name: true, image: true } },
+        images: LISTING_IMAGE_SELECT,
+      },
       orderBy: { createdAt: "desc" },
       take: 4,
     }),

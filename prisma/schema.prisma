@@ -130,10 +130,10 @@ model Listing {
   tags        ListingTag[]
 
   /// Exact address. Private: only revealed once a chat thread exists.
-  address String
+  address   String
   /// Exact coordinates. Private, same rule as `address`.
-  lat     Float
-  lng     Float
+  lat       Float
+  lng       Float
   /// Jittered coordinates safe for public display on the listing card/map.
   approxLat Float
   approxLng Float
@@ -150,11 +150,37 @@ model Listing {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
-  provider User      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  provider User           @relation(fields: [providerId], references: [id], onDelete: Cascade)
   messages Message[]
+  images   ListingImage[]
 
   @@index([status, category, price])
   @@index([providerId])
+}
+
+/// One photo of a listing. The bytes live in Supabase Storage (public bucket
+/// `listing-images`); this row holds the URL and the display metadata.
+model ListingImage {
+  id          String   @id @default(cuid())
+  listingId   String
+  /// Public URL to render. The bucket is public, so this is a plain CDN URL
+  /// with no signing and no expiry.
+  url         String
+  /// Object path inside the bucket, `<listingId>/<uuid>.<ext>`, needed to
+  /// delete the object later. Nullable so a row can point at an image this app
+  /// does not own.
+  storagePath String?
+  mimeType    String
+  width       Int
+  height      Int
+  alt         String
+  /// Display order. 0 is the cover shown on cards and search results.
+  position    Int
+  createdAt   DateTime @default(now())
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, position])
 }
 
 // ---------------------------------------------------------------------------

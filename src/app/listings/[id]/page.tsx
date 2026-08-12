@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ApproxMap } from "@/components/approx-map";
+import { ListingGallery } from "@/components/listing-gallery";
 import { TagPill } from "@/components/listing-card";
 import { prisma } from "@/lib/prisma";
+import { LISTING_IMAGE_SELECT } from "@/lib/images";
 import { getCurrentUser } from "@/lib/auth";
 import { isAddressUnlocked } from "@/lib/conversations";
 import { redactLocationDetails } from "@/lib/redaction";
@@ -21,7 +23,10 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
 
   const listing = await prisma.listing.findUnique({
     where: { id },
-    include: { provider: { select: { id: true, name: true, image: true } } },
+    include: {
+      provider: { select: { id: true, name: true, image: true } },
+      images: LISTING_IMAGE_SELECT,
+    },
   });
   if (!listing) notFound();
 
@@ -65,6 +70,12 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
       <div className="mt-4 grid gap-6 lg:grid-cols-[1fr_320px]">
         {/* ---------------------------------------------------------------- */}
         <div>
+          {listing.images.length > 0 && (
+            <div className="mb-5">
+              <ListingGallery images={listing.images} />
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-line bg-surface-muted px-2.5 py-1 text-xs font-medium text-ink-soft">
               {CATEGORY_LABELS[listing.category]}
