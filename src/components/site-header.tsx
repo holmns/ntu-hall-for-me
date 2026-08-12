@@ -18,10 +18,10 @@ export async function SiteHeader() {
           </span>
         </Link>
 
-        <nav className="ml-auto flex items-center gap-1 text-sm">
+        <nav className="ml-auto flex items-center gap-0.5 text-sm sm:gap-1">
           <Link
             href="/search"
-            className="rounded-lg px-3 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink"
+            className="hidden whitespace-nowrap rounded-lg px-3 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink sm:block"
           >
             Browse
           </Link>
@@ -29,24 +29,27 @@ export async function SiteHeader() {
             <>
               <Link
                 href="/messages"
-                className="rounded-lg px-3 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink"
+                className="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink sm:px-3"
               >
                 Messages
               </Link>
               <Link
                 href="/post"
-                className="rounded-lg px-3 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink"
+                className="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink sm:px-3"
               >
-                Post a room
+                Post<span className="hidden sm:inline"> a room</span>
               </Link>
-              <span className="mx-1 hidden h-5 w-px bg-line sm:block" />
-              <span className="hidden max-w-[12ch] truncate text-ink-faint sm:block">
+              <span className="mx-1 hidden h-5 w-px bg-line lg:block" />
+              <span className="hidden max-w-[12ch] truncate text-ink-faint lg:block">
                 {user.name ?? user.email}
               </span>
               <SignOutButton />
             </>
           ) : (
-            <Link href="/signin" className="btn-primary ml-1 !px-4 !py-1.5">
+            <Link
+              href="/signin"
+              className="btn-primary ml-1 whitespace-nowrap !px-4 !py-1.5"
+            >
               Sign in
             </Link>
           )}
