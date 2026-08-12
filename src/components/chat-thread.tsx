@@ -27,6 +27,9 @@ export function ChatThread({
   initialMessages: ChatMessage[];
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  // Set when the poll 404s, which means the provider deleted the listing while
+  // this thread was open.
+  const [gone, setGone] = useState(false);
   const [state, formAction, isPending] = useActionState<
     SendMessageState,
     FormData
@@ -43,6 +46,13 @@ export function ChatThread({
         const res = await fetch(`/api/messages/${listingId}/${peerId}`, {
           cache: "no-store",
         });
+        // A deleted listing takes its messages with it, so there is nothing
+        // left to poll for - say so instead of looking live.
+        if (res.status === 404) {
+          clearInterval(timer);
+          if (!cancelled) setGone(true);
+          return;
+        }
         if (!res.ok) return;
         const data = (await res.json()) as { messages: ChatMessage[] };
         if (!cancelled) setMessages(data.messages);
@@ -80,9 +90,7 @@ export function ChatThread({
       >
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-            <p className="text-[14px] font-medium text-ink">
-              No messages yet
-            </p>
+            <p className="text-[14px] font-medium text-ink">No messages yet</p>
             <p className="mt-1 max-w-xs text-[13px] leading-relaxed text-ink-soft">
               Say hello to {peerName}. The exact address is revealed once they
               reply, so it stays their decision to share it.
@@ -124,45 +132,55 @@ export function ChatThread({
         <div ref={bottomRef} />
       </div>
 
-      <form
-        ref={formRef}
-        action={formAction}
-        className="border-t border-line bg-surface p-3"
-      >
-        <input type="hidden" name="listingId" value={listingId} />
-        <input type="hidden" name="peerId" value={peerId} />
-        <div className="flex items-end gap-2">
-          <textarea
-            name="content"
-            rows={1}
-            required
-            maxLength={2000}
-            placeholder={`Message ${peerName}...`}
-            aria-label="Message"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                e.currentTarget.form?.requestSubmit();
-              }
-            }}
-            className="field max-h-32 min-h-[42px] flex-1 resize-none py-2.5"
-          />
-          <button
-            type="submit"
-            disabled={isPending}
-            className="btn-primary shrink-0 !px-4"
-          >
-            {isPending ? "..." : "Send"}
-          </button>
+      {gone ? (
+        <div className="border-t border-line bg-surface-muted px-4 py-3.5 text-[13px] leading-relaxed text-ink-soft">
+          <span className="font-medium text-ink">
+            This listing was deleted.
+          </span>{" "}
+          The provider removed the room, so the conversation is closed and will
+          not be here next time.
         </div>
-        {state.error && (
-          <p className="mt-2 text-xs text-brand">{state.error}</p>
-        )}
-        <p className="mt-2 text-[11px] text-ink-faint">
-          Updates every {POLL_INTERVAL_MS / 1000}s. Never send payment before
-          viewing a room in person.
-        </p>
-      </form>
+      ) : (
+        <form
+          ref={formRef}
+          action={formAction}
+          className="border-t border-line bg-surface p-3"
+        >
+          <input type="hidden" name="listingId" value={listingId} />
+          <input type="hidden" name="peerId" value={peerId} />
+          <div className="flex items-end gap-2">
+            <textarea
+              name="content"
+              rows={1}
+              required
+              maxLength={2000}
+              placeholder={`Message ${peerName}...`}
+              aria-label="Message"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
+              className="field max-h-32 min-h-[42px] flex-1 resize-none py-2.5"
+            />
+            <button
+              type="submit"
+              disabled={isPending}
+              className="btn-primary shrink-0 !px-4"
+            >
+              {isPending ? "..." : "Send"}
+            </button>
+          </div>
+          {state.error && (
+            <p className="mt-2 text-xs text-brand">{state.error}</p>
+          )}
+          <p className="mt-2 text-[11px] text-ink-faint">
+            Updates every {POLL_INTERVAL_MS / 1000}s. Never send payment before
+            viewing a room in person.
+          </p>
+        </form>
+      )}
     </div>
   );
 }

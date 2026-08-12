@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { DeleteListingButton } from "@/components/delete-listing-button";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { countThreadsByListing } from "@/lib/conversations";
 import { LISTING_IMAGE_SELECT } from "@/lib/images";
 import { CATEGORY_LABELS, ROOM_TYPE_LABELS } from "@/lib/constants";
 
@@ -19,6 +21,12 @@ export default async function MyListingsPage() {
   });
 
   const active = listings.filter((l) => l.status === "ACTIVE").length;
+  // One grouped query for the whole page, so the delete confirmation on each
+  // row can name the conversations that row would take with it.
+  const threads = await countThreadsByListing(
+    listings.map((l) => l.id),
+    user.id,
+  );
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
@@ -132,6 +140,14 @@ export default async function MyListingsPage() {
                       >
                         View
                       </Link>
+                      <DeleteListingButton
+                        listingId={listing.id}
+                        title={listing.title}
+                        photoCount={listing.images.length}
+                        threadCount={threads.get(listing.id) ?? 0}
+                        isActive={isActive}
+                        variant="quiet"
+                      />
                     </div>
                   </div>
                 </div>

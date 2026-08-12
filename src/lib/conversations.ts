@@ -70,6 +70,39 @@ export async function getThreadMessages(
   });
 }
 
+/**
+ * How many distinct chat threads exist for each of these listings, seen from
+ * the owner's side: one per other person, whichever way the messages went.
+ *
+ * Exists so a provider can be told what deleting a listing is about to destroy
+ * - the messages cascade with the row and there is no undo. `groupBy` rather
+ * than `listThreads`'s load-everything approach, because the caller needs a
+ * number and not a single line of message content.
+ */
+export async function countThreadsByListing(
+  listingIds: string[],
+  ownerId: string,
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (listingIds.length === 0) return counts;
+
+  const pairs = await prisma.message.groupBy({
+    by: ["listingId", "senderId", "receiverId"],
+    where: { listingId: { in: listingIds } },
+  });
+
+  const peers = new Map<string, Set<string>>();
+  for (const pair of pairs) {
+    const peer = pair.senderId === ownerId ? pair.receiverId : pair.senderId;
+    const seen = peers.get(pair.listingId) ?? new Set<string>();
+    seen.add(peer);
+    peers.set(pair.listingId, seen);
+  }
+  for (const [listingId, seen] of peers) counts.set(listingId, seen.size);
+
+  return counts;
+}
+
 export type ThreadSummary = {
   listingId: string;
   listingTitle: string;

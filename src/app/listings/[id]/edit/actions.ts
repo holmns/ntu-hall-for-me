@@ -314,9 +314,9 @@ export async function updateListing(
 }
 
 /**
- * Takes a listing out of search, or puts it back. Deactivating is the way to
- * withdraw a room: there is no hard delete, so existing chat threads keep
- * working.
+ * Takes a listing out of search, or puts it back. Deactivating is the
+ * reversible way to withdraw a room - the row, its photos and its chat threads
+ * all survive. `deleteListing` below is the irreversible one.
  */
 export async function setListingStatus(formData: FormData): Promise<void> {
   const user = await requireUser();
@@ -332,4 +332,70 @@ export async function setListingStatus(formData: FormData): Promise<void> {
   if (count === 0) return;
 
   revalidateListing(listingId);
+}
+
+export type DeleteListingState = { error?: string };
+
+/**
+ * Removes a listing for good: the row, its photo rows, the objects in the
+ * bucket and every message about it.
+ *
+ * Deactivating (above) is the softer option and the one the UI recommends,
+ * because this one takes the chat threads with it - `Message.listingId`
+ * cascades, so the seeker on the other side loses the conversation too and is
+ * not told. That is the cost of a real delete and the reason both entry points
+ * confirm first, naming how many threads are about to go.
+ */
+export async function deleteListing(
+  _prev: DeleteListingState,
+  formData: FormData,
+): Promise<DeleteListingState> {
+  const listingId = String(formData.get("listingId") ?? "");
+  if (!listingId) return { error: "Something went wrong. Please reload." };
+
+  // A stray POST of the wrong form should not be able to delete a room, so the
+  // intent is spelled out in the body rather than implied by the endpoint.
+  if (formData.get("confirm") !== "delete") {
+    return { error: "Something went wrong. Please reload." };
+  }
+
+  let user;
+  try {
+    user = await requireUser();
+  } catch {
+    redirect(`/signin?callbackUrl=/listings/${listingId}/edit`);
+  }
+
+  const listing = await prisma.listing.findUnique({
+    where: { id: listingId },
+    select: {
+      id: true,
+      providerId: true,
+      images: { select: { storagePath: true } },
+    },
+  });
+
+  // Same reasoning as updateListing: reachable by direct POST, so ownership is
+  // re-checked here rather than trusted from the page that rendered the button.
+  if (!listing || listing.providerId !== user.id) {
+    return { error: "That listing is not yours to delete." };
+  }
+
+  // ListingImage and Message both cascade at the database level, so one
+  // statement clears the row and everything hanging off it.
+  await prisma.listing.delete({ where: { id: listing.id } });
+
+  // Bucket sweep last, the same ordering updateListing uses for dropped
+  // photos: an orphaned object is wasted bytes, whereas a missing object under
+  // a row that still exists is a broken gallery.
+  await removeListingImages(
+    listing.images
+      .map((image) => image.storagePath)
+      .filter((path): path is string => Boolean(path)),
+  );
+
+  revalidateListing(listing.id);
+  // The threads about this listing have just disappeared from both inboxes.
+  revalidatePath("/messages");
+  redirect("/my-listings");
 }
