@@ -1,6 +1,7 @@
 import type {
   ListingCategory,
   ListingTag,
+  Role,
   RoomType,
 } from "@/generated/prisma/enums";
 
@@ -56,6 +57,19 @@ export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
 export const CATEGORY_LABELS: Record<ListingCategory, string> = {
   ON_CAMPUS: "On-campus sublet",
   OFF_CAMPUS: "Off-campus",
+};
+
+export const ROLE_LABELS: Record<Role, string> = {
+  SEEKER: "Looking for a room",
+  PROVIDER: "Offering a room",
+  BOTH: "Looking and offering",
+};
+
+/** The one-line explanation under each role on the settings page. */
+export const ROLE_HINTS: Record<Role, string> = {
+  SEEKER: "You are searching for somewhere to live near NTU.",
+  PROVIDER: "You have a room to sublet or rent out.",
+  BOTH: "You are doing both - subletting your room and looking for another.",
 };
 
 /** How a travel mode reads in a commute sentence ("17 min by bus/MRT"). */

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { getCurrentUser } from "@/lib/auth";
 import { SignOutButton } from "./auth-buttons";
+import { UserMenu } from "./user-menu";
 
 export async function SiteHeader() {
   const user = await getCurrentUser();
@@ -21,7 +22,7 @@ export async function SiteHeader() {
         <nav className="ml-auto flex items-center gap-0.5 text-sm sm:gap-1">
           <Link
             href="/search"
-            className="hidden whitespace-nowrap rounded-lg px-3 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink sm:block"
+            className="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink sm:px-3"
           >
             Browse
           </Link>
@@ -33,26 +34,21 @@ export async function SiteHeader() {
               >
                 Messages
               </Link>
-              {/* Hidden on mobile for the same reason as Browse: a fifth item
-                  wraps the header. Providers reach it from their own listing
-                  page there. */}
-              <Link
-                href="/my-listings"
-                className="hidden whitespace-nowrap rounded-lg px-3 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink sm:block"
-              >
-                Your listings
-              </Link>
               <Link
                 href="/post"
                 className="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink sm:px-3"
               >
                 Post<span className="hidden sm:inline"> a room</span>
               </Link>
-              <span className="mx-1 hidden h-5 w-px bg-line lg:block" />
-              <span className="hidden max-w-[12ch] truncate text-ink-faint lg:block">
-                {user.name ?? user.email}
-              </span>
-              <SignOutButton />
+              {/* Saved rooms, your listings, profile, settings and sign out all
+                  live behind this, which is what keeps the bar to three items
+                  on a phone. */}
+              <UserMenu
+                name={user.name ?? null}
+                email={user.email ?? null}
+                image={user.image ?? null}
+                signOut={<SignOutButton />}
+              />
             </>
           ) : (
             <Link

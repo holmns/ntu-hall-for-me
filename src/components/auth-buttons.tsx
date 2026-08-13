@@ -1,6 +1,14 @@
 import { signIn, signOut } from "@/lib/auth";
 
-export function SignOutButton() {
+/**
+ * `menu` fills a row of the account dropdown; `button` is a standalone control
+ * for a page. The two differ only in chrome - the action is the same.
+ */
+export function SignOutButton({
+  variant = "menu",
+}: {
+  variant?: "menu" | "button";
+}) {
   return (
     <form
       action={async () => {
@@ -10,7 +18,12 @@ export function SignOutButton() {
     >
       <button
         type="submit"
-        className="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink sm:px-3"
+        {...(variant === "menu" ? { role: "menuitem" } : {})}
+        className={
+          variant === "menu"
+            ? "block w-full px-3.5 py-2 text-left text-[13px] text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink"
+            : "btn-secondary"
+        }
       >
         Sign out
       </button>

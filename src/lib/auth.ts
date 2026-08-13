@@ -37,19 +37,41 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers,
   pages: { signIn: "/signin" },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account, profile }) {
       if (user?.id) token.sub = user.id;
-      if (token.sub) {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: token.sub },
-          select: { role: true },
-        });
-        // The row can vanish under a live session (account deleted, or the
-        // database reseeded). Invalidate rather than hand back a session
-        // pointing at a missing user, which would fail on the first write.
-        if (!dbUser) return null;
-        token.role = dbUser.role;
+      if (!token.sub) return token;
+
+      // Google owns the display name and picture, but the Prisma adapter only
+      // copies them when it first creates the row. An account that already
+      // existed - a seeded demo user matched by email, or anyone who changed
+      // their Google photo since signing up - would otherwise keep a stale or
+      // null image forever, and the header would show an initial instead.
+      if (account?.provider === "google" && profile) {
+        const picture =
+          typeof profile.picture === "string" ? profile.picture : null;
+        const name = typeof profile.name === "string" ? profile.name : null;
+        if (picture || name) {
+          await prisma.user.update({
+            where: { id: token.sub },
+            data: {
+              ...(picture ? { image: picture } : {}),
+              ...(name ? { name } : {}),
+            },
+          });
+        }
       }
+
+      const dbUser = await prisma.user.findUnique({
+        where: { id: token.sub },
+        select: { role: true, name: true, image: true },
+      });
+      // The row can vanish under a live session (account deleted, or the
+      // database reseeded). Invalidate rather than hand back a session
+      // pointing at a missing user, which would fail on the first write.
+      if (!dbUser) return null;
+      token.role = dbUser.role;
+      token.name = dbUser.name;
+      token.picture = dbUser.image;
       return token;
     },
     async session({ session, token }) {
