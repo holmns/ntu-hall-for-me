@@ -17,7 +17,11 @@ import {
   MapOptions,
   type MapType,
 } from "./map-options";
-import { NTU_CAMPUS, NTU_CAMPUS_OUTLINE } from "@/lib/constants";
+import {
+  NTU_CAMPUS,
+  NTU_CAMPUS_OUTLINE,
+  SINGAPORE_MAP_BOUNDS,
+} from "@/lib/constants";
 import { areaBounds, type AreaPoint } from "@/lib/area-filter";
 import {
   ALL_LAYERS_VISIBLE,
@@ -223,6 +227,16 @@ export function ResultsMap({
           // cluster in a lot of sea. Fractional zoom lets fitBounds land on
           // the level that actually fills the panel.
           isFractionalZoomEnabled: true,
+          // Caps panning and zoom-out at Singapore. Maps derives the actual
+          // minimum zoom from the container's own size and aspect ratio, so
+          // this holds at any viewport without a hardcoded zoom number - a
+          // narrow phone map and the full-width desktop map both stop
+          // exactly at the coastline instead of one of them showing extra
+          // ocean or clipping the boundary early.
+          restriction: {
+            latLngBounds: SINGAPORE_MAP_BOUNDS,
+            strictBounds: true,
+          },
         });
         mapRef.current = map;
 

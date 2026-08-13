@@ -8,6 +8,20 @@ import type {
 /** NTU main campus (Nanyang Ave). All commute times are measured to here. */
 export const NTU_CAMPUS = { lat: 1.3483, lng: 103.6831 } as const;
 
+/**
+ * The furthest a browse map is allowed to pan or zoom out to - all of
+ * Singapore plus a sliver of Johor Bahru across the causeway, so the map
+ * never drifts into open ocean or another country. Read off a live map
+ * rather than an official survey boundary, which is fine here: this only
+ * caps the camera, it plays no part in categorising or filtering a listing.
+ */
+export const SINGAPORE_MAP_BOUNDS = {
+  north: 1.5313471083437145,
+  east: 104.08815781486294,
+  south: 1.1714167113557785,
+  west: 103.50244919669888,
+} as const;
+
 /** Bias Places Autocomplete toward NTU / west Singapore. */
 export const SEARCH_BIAS_RADIUS_M = 8000;
 
