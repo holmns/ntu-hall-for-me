@@ -28,7 +28,7 @@ function ntuMarkerDot(): HTMLElement {
  *
  * Places gives a building-level point, which is often the wrong block in an
  * HDB estate. The provider drags the pin to the actual block; that coordinate
- * drives the commute calculation and the public map circle.
+ * drives the commute calculation and the pin every seeker sees.
  *
  * The server re-resolves the placeId and only accepts an adjusted pin within
  * MAX_ADJUST_M of it, so a hand-edited hidden field cannot place a listing on
@@ -173,7 +173,7 @@ export function LocationPicker({
         </svg>
         <span>
           {moved
-            ? "Pin moved. This exact point is used for the commute calculation, and only an approximate area is shown publicly."
+            ? "Pin moved. This is the point seekers see on the map and the one the commute is measured from."
             : "Drag the pin (or click the map) to mark the exact block. The address text above stays as you selected it."}
         </span>
       </p>

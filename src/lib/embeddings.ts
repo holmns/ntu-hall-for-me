@@ -121,10 +121,13 @@ export function toVectorLiteral(vector: number[]): string {
 /**
  * The listing text that gets embedded.
  *
- * PRIVACY: public fields only. `address`, `lat` and `lng` are deliberately
- * absent - they are gated behind a mutual conversation, and a vector built from
- * them would let a crafted query rank listings by how close they sit to a
- * guessed address. Everything here is already visible on a listing card.
+ * `address`, `lat` and `lng` are deliberately absent even though they are
+ * public now: proximity is already a structured filter over the cached commute
+ * columns, and folding a street address into the vector only adds noise that
+ * pulls "Jurong West" queries toward whatever happens to say Jurong West.
+ *
+ * Changing what goes in here changes the vector space, so anything added below
+ * needs a `npm run db:embed` to avoid mixing old and new vectors.
  */
 export function listingEmbeddingText(listing: {
   title: string;

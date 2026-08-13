@@ -7,7 +7,7 @@ import type {
   ListingTag,
   RoomType,
 } from "../src/generated/prisma/enums";
-import { approximateLocation, computeCommute } from "../src/lib/maps";
+import { computeCommute } from "../src/lib/maps";
 import {
   embedTexts,
   listingEmbeddingText,
@@ -476,11 +476,6 @@ async function main() {
       { lat: place.lat, lng: place.lng },
       item.category,
     );
-    const approx = approximateLocation(
-      { lat: place.lat, lng: place.lng },
-      item.placeId,
-    );
-
     const listing = await prisma.listing.create({
       data: {
         providerId: provider.id,
@@ -493,8 +488,6 @@ async function main() {
         address: place.address,
         lat: place.lat,
         lng: place.lng,
-        approxLat: approx.lat,
-        approxLng: approx.lng,
         distanceMeters: commute.distanceMeters,
         distanceWalkingMin: commute.walkingMin,
         distanceTransitMin: commute.transitMin,

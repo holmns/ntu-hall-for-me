@@ -92,8 +92,8 @@ export function ChatThread({
           <div className="flex h-full flex-col items-center justify-center px-6 text-center">
             <p className="text-[14px] font-medium text-ink">No messages yet</p>
             <p className="mt-1 max-w-xs text-[13px] leading-relaxed text-ink-soft">
-              Say hello to {peerName}. The exact address is revealed once they
-              reply, so it stays their decision to share it.
+              Say hello to {peerName}. Mention when you would move in and how
+              long you need the room - it saves a round trip.
             </p>
           </div>
         ) : (

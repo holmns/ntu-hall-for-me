@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 
 import { CATEGORY_LABELS, ROOM_TYPE_LABELS, TAG_LABELS } from "@/lib/constants";
 import { commuteMinutes, type TravelMode } from "@/lib/matching";
-import { redactLocationDetails } from "@/lib/redaction";
 import type { ListingTag } from "@/generated/prisma/enums";
 import type { ListingWithProvider } from "@/lib/matching";
 
@@ -144,9 +143,8 @@ export function ListingCard({
         <CardCover listing={listing} />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-4">
-            {/* Cards are always a public view, so the title is always redacted. */}
             <h3 className="text-[15px] font-semibold leading-snug text-ink group-hover:text-brand">
-              {redactLocationDetails(listing.title)}
+              {listing.title}
             </h3>
             <div className="shrink-0 text-right">
               <div className="text-[15px] font-semibold tabular-nums text-ink">

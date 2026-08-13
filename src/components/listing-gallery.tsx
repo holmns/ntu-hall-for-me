@@ -7,9 +7,9 @@ import type { ListingImageView } from "@/lib/images";
 /**
  * Photo gallery on the listing detail page.
  *
- * Alt text comes from the stored value rather than the listing title: titles
- * are redacted in public views, so building alt text from one would put the
- * block or unit number back into the markup.
+ * Alt text comes from the stored value rather than the listing title, which is
+ * edited independently and would leave the markup describing an older version
+ * of the listing.
  */
 export function ListingGallery({ images }: { images: ListingImageView[] }) {
   const [active, setActive] = useState(0);

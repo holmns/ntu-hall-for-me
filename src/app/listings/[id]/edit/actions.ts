@@ -5,12 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import {
-  approximateLocation,
-  computeCommute,
-  getPlaceDetail,
-  haversineMeters,
-} from "@/lib/maps";
+import { computeCommute, getPlaceDetail, haversineMeters } from "@/lib/maps";
 import { MAX_IMAGES_PER_LISTING, uploadedImageAlt } from "@/lib/images";
 import {
   fieldErrorsFrom,
@@ -169,10 +164,6 @@ export async function updateListing(
           drivingMin: listing.distanceDrivingMin,
         };
 
-  // Deterministic in the point and address, so this is a no-op when neither
-  // changed.
-  const approx = approximateLocation(point, `${user.id}:${address}`);
-
   // Same guard as the commute above: re-embedding is a paid round trip, so
   // compare the text that actually gets embedded rather than assuming any save
   // changed it. Moving the pin does not, since location is deliberately not
@@ -270,8 +261,6 @@ export async function updateListing(
         address,
         lat: point.lat,
         lng: point.lng,
-        approxLat: approx.lat,
-        approxLng: approx.lng,
         distanceMeters: commute.distanceMeters,
         distanceWalkingMin: commute.walkingMin,
         distanceTransitMin: commute.transitMin,

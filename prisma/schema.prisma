@@ -129,14 +129,11 @@ model Listing {
   roomType    RoomType
   tags        ListingTag[]
 
-  /// Exact address. Private: only revealed once a chat thread exists.
-  address   String
-  /// Exact coordinates. Private, same rule as `address`.
-  lat       Float
-  lng       Float
-  /// Jittered coordinates safe for public display on the listing card/map.
-  approxLat Float
-  approxLng Float
+  /// Exact address, shown publicly on the listing and used for the map pin.
+  address String
+  /// Exact coordinates. Public: every map in the app renders this point.
+  lat     Float
+  lng     Float
 
   /// Commute to NTU main campus, computed ONCE at creation via Distance Matrix
   /// and cached here. Search never calls a Maps API. On-campus listings are

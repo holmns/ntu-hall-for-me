@@ -5,12 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import {
-  approximateLocation,
-  computeCommute,
-  getPlaceDetail,
-  haversineMeters,
-} from "@/lib/maps";
+import { computeCommute, getPlaceDetail, haversineMeters } from "@/lib/maps";
 import { uploadedImageAlt } from "@/lib/images";
 import { embedAndStoreListing } from "@/lib/embeddings";
 import type { ListingTag } from "@/generated/prisma/enums";
@@ -81,7 +76,6 @@ export async function createListing(
   // The single Maps write-path call. Results are cached on the row and search
   // never recomputes them.
   const commute = await computeCommute(point, data.category);
-  const approx = approximateLocation(point, `${user.id}:${address}`);
 
   const listing = await prisma.listing.create({
     data: {
@@ -95,8 +89,6 @@ export async function createListing(
       address,
       lat: point.lat,
       lng: point.lng,
-      approxLat: approx.lat,
-      approxLng: approx.lng,
       distanceMeters: commute.distanceMeters,
       distanceWalkingMin: commute.walkingMin,
       distanceTransitMin: commute.transitMin,

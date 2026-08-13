@@ -97,7 +97,6 @@ export default async function MyListingsPage() {
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
-                      {/* The owner's own listing, so nothing is redacted. */}
                       <h2 className="text-[15px] font-semibold leading-snug text-ink">
                         {listing.title}
                       </h2>

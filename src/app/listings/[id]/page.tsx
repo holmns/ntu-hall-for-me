@@ -1,14 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { ApproxMap } from "@/components/approx-map";
+import { ListingMap } from "@/components/listing-map";
 import { ListingGallery } from "@/components/listing-gallery";
 import { TagPill } from "@/components/listing-card";
 import { prisma } from "@/lib/prisma";
 import { LISTING_IMAGE_SELECT } from "@/lib/images";
 import { getCurrentUser } from "@/lib/auth";
-import { isAddressUnlocked } from "@/lib/conversations";
-import { redactLocationDetails } from "@/lib/redaction";
 import {
   CATEGORY_LABELS,
   ON_CAMPUS_DISCLAIMER,
@@ -36,18 +34,6 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
   // A withdrawn room should stop taking enquiries, but a bookmarked link
   // deserves a better answer than a bare 404.
   if (listing.status !== "ACTIVE" && !isOwner) return <Withdrawn />;
-  const addressUnlocked = user
-    ? await isAddressUnlocked(listing.id, user.id, listing.providerId)
-    : false;
-
-  // The map pin is useless as protection if the free text spells out the
-  // block or unit, so the same gate applies to the listing's own words.
-  const title = addressUnlocked
-    ? listing.title
-    : redactLocationDetails(listing.title);
-  const description = addressUnlocked
-    ? listing.description
-    : redactLocationDetails(listing.description);
 
   const tags = listing.tags as ListingTag[];
   const onCampus = listing.category === "ON_CAMPUS";
@@ -105,7 +91,7 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
           </div>
 
           <h1 className="mt-3 text-balance text-2xl font-semibold leading-tight tracking-tight text-ink sm:text-[28px]">
-            {title}
+            {listing.title}
           </h1>
 
           <div className="mt-2 flex items-baseline gap-2">
@@ -126,7 +112,7 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
               Description
             </h2>
             <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed text-ink-soft">
-              {description}
+              {listing.description}
             </p>
           </section>
 
@@ -149,39 +135,20 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
             </h2>
 
             <div className="mt-2.5">
-              <ApproxMap
-                lat={addressUnlocked ? listing.lat : listing.approxLat}
-                lng={addressUnlocked ? listing.lng : listing.approxLng}
-                exact={addressUnlocked}
-              />
+              <ListingMap lat={listing.lat} lng={listing.lng} />
             </div>
 
-            {addressUnlocked ? (
-              <p className="mt-2.5 flex items-start gap-2 text-[14px] text-ink">
-                <svg
-                  viewBox="0 0 16 16"
-                  className="mt-0.5 h-4 w-4 shrink-0 text-brand"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path d="M8 0a5 5 0 0 0-5 5c0 3.5 5 11 5 11s5-7.5 5-11a5 5 0 0 0-5-5Zm0 7a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z" />
-                </svg>
-                {listing.address}
-              </p>
-            ) : (
-              <p className="mt-2.5 flex items-start gap-2 rounded-lg bg-surface-muted px-3 py-2.5 text-[13px] leading-relaxed text-ink-soft">
-                <svg
-                  viewBox="0 0 16 16"
-                  className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path d="M4.5 6V4.5a3.5 3.5 0 1 1 7 0V6H12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h.5Zm1.5 0h4V4.5a2 2 0 1 0-4 0V6Z" />
-                </svg>
-                Approximate area only. The exact address is shared once the
-                provider replies to you, so it is their choice to share it.
-              </p>
-            )}
+            <p className="mt-2.5 flex items-start gap-2 text-[14px] text-ink">
+              <svg
+                viewBox="0 0 16 16"
+                className="mt-0.5 h-4 w-4 shrink-0 text-brand"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M8 0a5 5 0 0 0-5 5c0 3.5 5 11 5 11s5-7.5 5-11a5 5 0 0 0-5-5Zm0 7a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z" />
+              </svg>
+              {listing.address}
+            </p>
           </section>
         </div>
 

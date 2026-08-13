@@ -58,7 +58,5 @@ export async function sendMessage(
 
   revalidatePath(`/messages/${listingId}/${peerId}`);
   revalidatePath("/messages");
-  // The exact address unlocks once a thread exists.
-  revalidatePath(`/listings/${listingId}`);
   return { ok: true };
 }

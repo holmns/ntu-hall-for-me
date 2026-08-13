@@ -95,11 +95,9 @@ export const LISTING_IMAGE_SELECT = {
 } as const;
 
 /**
- * Alt text stored for an uploaded photo.
- *
- * Deliberately generic. The listing title is redacted in public views, so
- * deriving alt text from it would leak the block or unit number straight back
- * out through the image markup.
+ * Alt text stored for an uploaded photo. Deliberately generic rather than
+ * derived from the title, which is edited independently and would leave every
+ * photo describing an older version of the listing.
  */
 export function uploadedImageAlt(index: number): string {
   return `Room photo ${index + 1}`;

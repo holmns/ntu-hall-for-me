@@ -4,7 +4,6 @@ import { useActionState, useState } from "react";
 
 import { AddressAutocomplete } from "./address-autocomplete";
 import { ImageUploader } from "./image-uploader";
-import { findLocationDetails } from "@/lib/redaction";
 import {
   CATEGORY_LABELS,
   ON_CAMPUS_DISCLAIMER,
@@ -79,16 +78,9 @@ export function ListingForm({
 }) {
   const [state, formAction, isPending] = useActionState(action, initialState);
   const [category, setCategory] = useState<ListingCategory>(values.category);
-  const [freeText, setFreeText] = useState({
-    title: values.title,
-    description: values.description,
-  });
   // Photos are still being resized in the browser; submitting now would post a
   // half-empty file input.
   const [imagesBusy, setImagesBusy] = useState(false);
-
-  // Warn before publishing rather than silently redacting later.
-  const leaks = findLocationDetails(`${freeText.title}\n${freeText.description}`);
 
   const hasAddress = values.address.length > 0;
 
@@ -111,9 +103,6 @@ export function ListingForm({
             required
             maxLength={120}
             defaultValue={values.title}
-            onChange={(e) =>
-              setFreeText((v) => ({ ...v, title: e.target.value }))
-            }
             placeholder="e.g. Quiet common room, 10 min bus to NTU"
             className="field"
           />
@@ -177,7 +166,7 @@ export function ListingForm({
 
       <Section
         title="Address"
-        subtitle="Used once to work out the commute to NTU. Only an approximate area is shown publicly, until someone messages you and you choose to reply."
+        subtitle="Shown publicly on your listing, pinned on the map, and used once to work out the commute to NTU. Post a room you are comfortable having people turn up at."
       >
         <Field label="Full address" error={state.fieldErrors?.address}>
           <AddressAutocomplete
@@ -203,27 +192,10 @@ export function ListingForm({
             minLength={30}
             maxLength={4000}
             defaultValue={values.description}
-            onChange={(e) =>
-              setFreeText((v) => ({ ...v, description: e.target.value }))
-            }
             placeholder="What the room is like, who else lives there, the neighbourhood, any house rules, how long the lease can run..."
             className="field resize-y leading-relaxed"
           />
         </Field>
-
-        {leaks.length > 0 && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900">
-            <p className="font-medium">
-              This looks like part of your address:{" "}
-              {leaks.map((l) => `"${l.text}"`).join(", ")}
-            </p>
-            <p className="mt-1">
-              It will be hidden from your public listing until someone messages
-              you and you reply. You can leave it in, but describing the area
-              instead ({'"'}5 min from Pioneer MRT{'"'}) reads better.
-            </p>
-          </div>
-        )}
       </Section>
 
       <Section
@@ -235,10 +207,6 @@ export function ListingForm({
           onBusyChange={setImagesBusy}
           error={state.fieldErrors?.images}
         />
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900">
-          Photos are public straight away, unlike your address. Avoid shots that
-          show your block number, unit plate or letterbox.
-        </p>
       </Section>
 
       <Section
