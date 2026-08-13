@@ -158,11 +158,14 @@ export function ResultsView({
         </div>
 
         {/* The only thing that scrolls on desktop. `pr-1` keeps the scrollbar
-            off the cards' right edge. Dimmed rather than replaced while a new
-            search runs, so the page never goes blank under the reader. */}
+            off the cards' right edge; `pl-1` matches it on the left so the
+            selection ring's box-shadow isn't clipped by the scroll container
+            (overflow-y-auto makes the x-axis overflow auto too, and a ring
+            with zero left inset gets cut). Dimmed rather than replaced while
+            a new search runs, so the page never goes blank under the reader. */}
         <div
           aria-busy={pending}
-          className={`min-w-0 transition-opacity lg:h-full lg:overflow-y-auto lg:pr-1 ${
+          className={`min-w-0 transition-opacity lg:h-full lg:overflow-y-auto lg:pl-1 lg:pr-1 ${
             pending ? "pointer-events-none opacity-45" : ""
           }`}
         >
