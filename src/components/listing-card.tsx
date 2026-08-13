@@ -1,16 +1,15 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { CATEGORY_LABELS, ROOM_TYPE_LABELS, TAG_LABELS } from "@/lib/constants";
+import {
+  CATEGORY_LABELS,
+  ROOM_TYPE_LABELS,
+  TAG_LABELS,
+  TRAVEL_MODE_LABELS,
+} from "@/lib/constants";
 import { commuteMinutes, type TravelMode } from "@/lib/matching";
 import type { ListingTag } from "@/generated/prisma/enums";
 import type { ListingWithProvider } from "@/lib/matching";
-
-const MODE_LABEL: Record<TravelMode, string> = {
-  walking: "walk",
-  transit: "by bus/MRT",
-  driving: "drive",
-};
 
 export function TagPill({ tag }: { tag: ListingTag }) {
   return (
@@ -44,7 +43,7 @@ export function CommuteBadge({
       >
         <path d="M8 0a5 5 0 0 0-5 5c0 3.5 5 11 5 11s5-7.5 5-11a5 5 0 0 0-5-5Zm0 7a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z" />
       </svg>
-      {commuteMinutes(listing, mode)} min {MODE_LABEL[mode]} to NTU
+      {commuteMinutes(listing, mode)} min {TRAVEL_MODE_LABELS[mode]} to NTU
     </span>
   );
 }

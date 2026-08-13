@@ -58,6 +58,13 @@ export const CATEGORY_LABELS: Record<ListingCategory, string> = {
   OFF_CAMPUS: "Off-campus",
 };
 
+/** How a travel mode reads in a commute sentence ("17 min by bus/MRT"). */
+export const TRAVEL_MODE_LABELS = {
+  walking: "walk",
+  transit: "by bus/MRT",
+  driving: "drive",
+} as const;
+
 /**
  * On-campus listings are informal, student-to-student arrangements. NTU does
  * not sanction them and this app is not connected to hall balloting.

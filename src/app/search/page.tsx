@@ -3,11 +3,17 @@ import { Suspense } from "react";
 import { SearchBar } from "@/components/search-bar";
 import { ListingCard, ReasonPill } from "@/components/listing-card";
 import { IntentPanel } from "@/components/intent-panel";
+import { ResultsView, SelectableCard } from "@/components/results-view";
+import type { MapPin } from "@/components/results-map";
+import { ROOM_TYPE_LABELS, TRAVEL_MODE_LABELS } from "@/lib/constants";
 import {
+  commuteMinutes,
   REASON_LIMIT,
   searchListings,
   type ChipFilters,
+  type ListingWithProvider,
   type ReasonMap,
+  type TravelMode,
 } from "@/lib/matching";
 import type { ListingCategory, RoomType } from "@/generated/prisma/enums";
 
@@ -53,7 +59,7 @@ export default async function SearchPage(props: PageProps<"/search">) {
   const chips = parseChips(sp);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <SearchBar
         initial={{
           q: query,
@@ -130,28 +136,57 @@ async function Results({
           </p>
         </div>
       ) : (
-        <div className="mt-3 grid gap-3">
-          {listings.map((listing, index) => (
-            <ListingCard
-              key={listing.id}
-              listing={listing}
-              // Only the listings that got sent for a reason reserve space for
-              // one. The rest render exactly as they do when browsing.
-              reason={
-                query.trim() && index < REASON_LIMIT ? (
-                  <Suspense fallback={<ReasonSkeleton />}>
-                    <Reason state={reasonState} listingId={listing.id} />
-                  </Suspense>
-                ) : undefined
-              }
-              rank={query.trim() ? index + 1 : undefined}
-              mode={mode}
-            />
-          ))}
-        </div>
+        <ResultsView pins={listings.map((l) => toMapPin(l, mode))}>
+          <div className="mt-3 grid gap-3">
+            {listings.map((listing, index) => (
+              // The card stays a server component; this only wires hovering it
+              // to its pin on the map.
+              <SelectableCard key={listing.id} id={listing.id}>
+                <ListingCard
+                  listing={listing}
+                  // Only the listings that got sent for a reason reserve space
+                  // for one. The rest render exactly as they do when browsing.
+                  reason={
+                    query.trim() && index < REASON_LIMIT ? (
+                      <Suspense fallback={<ReasonSkeleton />}>
+                        <Reason state={reasonState} listingId={listing.id} />
+                      </Suspense>
+                    ) : undefined
+                  }
+                  rank={query.trim() ? index + 1 : undefined}
+                  mode={mode}
+                />
+              </SelectableCard>
+            ))}
+          </div>
+        </ResultsView>
       )}
     </div>
   );
+}
+
+/**
+ * Flattens a listing into the small shape the map needs. The commute label is
+ * baked in here because the travel mode comes from the parsed intent, which
+ * only exists on the server.
+ */
+function toMapPin(listing: ListingWithProvider, mode: TravelMode): MapPin {
+  const cover = listing.images[0];
+  const commute =
+    listing.category === "ON_CAMPUS"
+      ? "On campus"
+      : `${commuteMinutes(listing, mode)} min ${TRAVEL_MODE_LABELS[mode]} to NTU`;
+
+  return {
+    id: listing.id,
+    lat: listing.lat,
+    lng: listing.lng,
+    price: listing.price,
+    title: listing.title,
+    subtitle: `${ROOM_TYPE_LABELS[listing.roomType]} / ${commute}`,
+    imageUrl: cover?.url ?? null,
+    imageAlt: cover?.alt ?? "",
+  };
 }
 
 /** Streams in once the reasons call resolves. Renders nothing until then. */

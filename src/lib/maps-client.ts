@@ -16,10 +16,26 @@ type OverlayCtor = new (opts: Record<string, unknown>) => GOverlay;
 
 export type GLatLng = { lat: () => number; lng: () => number };
 
+export type GLatLngBounds = {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+};
+
 export type GMap = {
   addListener: (event: string, handler: (e: { latLng: GLatLng }) => void) => void;
   panTo: (pos: { lat: number; lng: number }) => void;
   setZoom: (zoom: number) => void;
+  getZoom: () => number | undefined;
+  /** Undefined until the map has laid out at least once. */
+  getBounds: () =>
+    | { getNorthEast: () => GLatLng; getSouthWest: () => GLatLng }
+    | undefined;
+  fitBounds: (
+    bounds: GLatLngBounds,
+    padding?: number | { top: number; right: number; bottom: number; left: number },
+  ) => void;
 };
 
 export type GOverlay = {
@@ -28,10 +44,17 @@ export type GOverlay = {
   addListener: (event: string, handler: (e: { latLng: GLatLng }) => void) => void;
 };
 
+/**
+ * AdvancedMarkerElement is a custom element, so taps arrive as the DOM event
+ * `gmp-click`. Listening for plain `click` through addListener still works but
+ * the API logs a deprecation warning for it.
+ */
 export type GAdvancedMarker = {
   position: { lat: number; lng: number } | GLatLng | null;
   map: GMap | null;
+  zIndex: number | null;
   addListener: (event: string, handler: () => void) => void;
+  addEventListener: (event: "gmp-click", handler: () => void) => void;
 };
 
 type AdvancedMarkerCtor = new (opts: {
@@ -40,6 +63,9 @@ type AdvancedMarkerCtor = new (opts: {
   title?: string;
   content?: HTMLElement;
   gmpDraggable?: boolean;
+  /** Advanced markers ignore click listeners unless this is set. */
+  gmpClickable?: boolean;
+  zIndex?: number;
 }) => GAdvancedMarker;
 
 type PinElementCtor = new (opts: {
