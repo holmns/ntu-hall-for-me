@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import { LocationPicker } from "./location-picker";
+import { isInsideCampus } from "@/lib/campus";
 
 type Suggestion = { placeId: string; primary: string; secondary: string };
 
@@ -15,6 +16,7 @@ type Suggestion = { placeId: string; primary: string; secondary: string };
 export function AddressAutocomplete({
   error,
   initial,
+  onPointChange,
 }: {
   error?: string;
   /**
@@ -23,6 +25,8 @@ export function AddressAutocomplete({
    * the cached commute can stand.
    */
   initial?: { address: string; lat: number; lng: number };
+  /** The point that will be submitted, or null while there is none. */
+  onPointChange?: (point: { lat: number; lng: number } | null) => void;
 }) {
   const listId = useId();
   const [query, setQuery] = useState(initial?.address ?? "");
@@ -78,6 +82,14 @@ export function AddressAutocomplete({
       clearTimeout(timer);
     };
   }, [query, sessionToken, selected]);
+
+  // Report the point that would be submitted. An effect rather than a call at
+  // each assignment: `coords` moves when an address is chosen, when the pin is
+  // dragged and when the field is typed over, and those three must not drift
+  // apart from what the form is told.
+  useEffect(() => {
+    onPointChange?.(coords);
+  }, [coords, onPointChange]);
 
   // Close on outside click.
   useEffect(() => {
@@ -211,7 +223,12 @@ export function AddressAutocomplete({
           <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
             <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14Zm-1-4.6 5-5-1.1-1L7 8.3 5.1 6.4l-1 1L7 10.4Z" />
           </svg>
-          Address set. The commute to NTU is calculated from this point.
+          {/* The category is not asked for anywhere, so this line is where the
+              provider finds out which one their address landed in. Inside the
+              campus there is no commute to quote - it is stored as zero. */}
+          {isInsideCampus(coords)
+            ? "Address set. The room is on campus."
+            : "Address set. The commute to NTU is calculated from this point."}
         </p>
       )}
       {error && <p className="mt-1.5 text-xs text-brand">{error}</p>}

@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { computeCommute, getPlaceDetail, haversineMeters } from "@/lib/maps";
+import { campusCategory } from "@/lib/campus";
 import { MAX_IMAGES_PER_LISTING, uploadedImageAlt } from "@/lib/images";
 import {
   fieldErrorsFrom,
@@ -149,14 +150,18 @@ export async function updateListing(
     if (haversineMeters(stored, candidate) <= MAX_ADJUST_M) point = candidate;
   }
 
+  // Re-derived from the point, exactly as posting does: an edit that moves
+  // the pin across the campus line moves the category with it.
+  const category = campusCategory(point);
+
   const moved = point.lat !== stored.lat || point.lng !== stored.lng;
-  const categoryChanged = data.category !== listing.category;
+  const categoryChanged = category !== listing.category;
 
   // Distance Matrix is the one paid call in this action, and on-campus
   // listings store zeroes, so only ask when the answer can actually differ.
   const commute =
     moved || categoryChanged
-      ? await computeCommute(point, data.category)
+      ? await computeCommute(point, category)
       : {
           distanceMeters: listing.distanceMeters,
           walkingMin: listing.distanceWalkingMin,
@@ -171,7 +176,7 @@ export async function updateListing(
   const nextEmbeddingText = listingEmbeddingText({
     title: data.title,
     description: data.description,
-    category: data.category,
+    category,
     roomType: data.roomType,
     price: data.price,
     tags: data.tags as ListingTag[],
@@ -254,7 +259,7 @@ export async function updateListing(
       data: {
         title: data.title,
         description: data.description,
-        category: data.category,
+        category,
         price: data.price,
         roomType: data.roomType,
         tags: data.tags as never,

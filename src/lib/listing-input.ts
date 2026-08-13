@@ -2,7 +2,12 @@ import { z } from "zod";
 
 import { ALL_TAGS, PRICE_MAX, PRICE_MIN } from "./constants";
 
-/** The listing fields the provider form submits, shared by create and edit. */
+/**
+ * The listing fields the provider form submits, shared by create and edit.
+ *
+ * No `category`: on- or off-campus is derived from the resolved point by
+ * `campusCategory`, so there is nothing for the form to say about it.
+ */
 export const listingSchema = z.object({
   title: z.string().trim().min(6, "Give the listing a clearer title").max(120),
   description: z
@@ -10,7 +15,6 @@ export const listingSchema = z.object({
     .trim()
     .min(30, "Write at least a couple of sentences so matching has something to work with")
     .max(4000),
-  category: z.enum(["ON_CAMPUS", "OFF_CAMPUS"]),
   price: z.coerce
     .number()
     .int()
@@ -61,7 +65,6 @@ export function parseListingForm(formData: FormData) {
   return listingSchema.safeParse({
     title: formData.get("title"),
     description: formData.get("description"),
-    category: formData.get("category"),
     price: formData.get("price"),
     roomType: formData.get("roomType"),
     tags: formData.getAll("tags"),

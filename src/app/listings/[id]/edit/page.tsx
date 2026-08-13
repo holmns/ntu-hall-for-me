@@ -70,7 +70,6 @@ export default async function EditListingPage(
         values={{
           title: listing.title,
           description: listing.description,
-          category: listing.category,
           roomType: listing.roomType,
           price: listing.price,
           tags: listing.tags as ListingTag[],

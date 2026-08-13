@@ -3,9 +3,9 @@
 import { useActionState, useState } from "react";
 
 import { AddressAutocomplete } from "./address-autocomplete";
+import { isInsideCampus } from "@/lib/campus";
 import { ImageUploader } from "./image-uploader";
 import {
-  CATEGORY_LABELS,
   ON_CAMPUS_DISCLAIMER,
   ROOM_TYPE_LABELS,
   TAG_GROUPS,
@@ -13,11 +13,7 @@ import {
 } from "@/lib/constants";
 import type { ListingFormState } from "@/lib/listing-input";
 import type { ListingImageView } from "@/lib/images";
-import type {
-  ListingCategory,
-  ListingTag,
-  RoomType,
-} from "@/generated/prisma/enums";
+import type { ListingTag, RoomType } from "@/generated/prisma/enums";
 
 /**
  * The provider form, shared by posting and editing.
@@ -30,7 +26,6 @@ import type {
 export type ListingFormValues = {
   title: string;
   description: string;
-  category: ListingCategory;
   roomType: RoomType;
   price: number | "";
   tags: ListingTag[];
@@ -42,7 +37,6 @@ export type ListingFormValues = {
 export const BLANK_LISTING: ListingFormValues = {
   title: "",
   description: "",
-  category: "OFF_CAMPUS",
   roomType: "SINGLE",
   price: "",
   tags: [],
@@ -77,12 +71,20 @@ export function ListingForm({
   secondary?: React.ReactNode;
 }) {
   const [state, formAction, isPending] = useActionState(action, initialState);
-  const [category, setCategory] = useState<ListingCategory>(values.category);
   // Photos are still being resized in the browser; submitting now would post a
   // half-empty file input.
   const [imagesBusy, setImagesBusy] = useState(false);
 
   const hasAddress = values.address.length > 0;
+
+  // The address currently in the form. `campusCategory` reads the same point
+  // server-side to set the category; this is only so the on-campus disclaimer
+  // appears while the provider is still writing the listing rather than for
+  // the first time on the published page.
+  const [point, setPoint] = useState<{ lat: number; lng: number } | null>(
+    hasAddress ? { lat: values.lat, lng: values.lng } : null,
+  );
+  const onCampus = point ? isInsideCampus(point) : false;
 
   return (
     <form action={formAction} className="mt-6 space-y-5">
@@ -108,22 +110,10 @@ export function ListingForm({
           />
         </Field>
 
+        {/* No category field. On- or off-campus is a fact about the address,
+            so it is read off the address instead of asked for - the field in
+            the section below says which one it came out as. */}
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Category" error={state.fieldErrors?.category}>
-            <select
-              name="category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value as ListingCategory)}
-              className="field"
-            >
-              {(Object.keys(CATEGORY_LABELS) as ListingCategory[]).map((c) => (
-                <option key={c} value={c}>
-                  {CATEGORY_LABELS[c]}
-                </option>
-              ))}
-            </select>
-          </Field>
-
           <Field label="Room type" error={state.fieldErrors?.roomType}>
             <select
               name="roomType"
@@ -139,7 +129,7 @@ export function ListingForm({
           </Field>
         </div>
 
-        {category === "ON_CAMPUS" && (
+        {onCampus && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900">
             {ON_CAMPUS_DISCLAIMER} It will be labelled this way on your listing.
           </p>
@@ -170,6 +160,7 @@ export function ListingForm({
       >
         <Field label="Full address" error={state.fieldErrors?.address}>
           <AddressAutocomplete
+            onPointChange={setPoint}
             error={state.fieldErrors?.lat}
             initial={
               hasAddress

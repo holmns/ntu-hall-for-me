@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { computeCommute, getPlaceDetail, haversineMeters } from "@/lib/maps";
+import { campusCategory } from "@/lib/campus";
 import { uploadedImageAlt } from "@/lib/images";
 import { embedAndStoreListing } from "@/lib/embeddings";
 import type { ListingTag } from "@/generated/prisma/enums";
@@ -73,16 +74,20 @@ export async function createListing(
     }
   }
 
+  // Where the room is, not what anyone picked. The form has no category
+  // field; it reads the address the same way and says which one it is.
+  const category = campusCategory(point);
+
   // The single Maps write-path call. Results are cached on the row and search
   // never recomputes them.
-  const commute = await computeCommute(point, data.category);
+  const commute = await computeCommute(point, category);
 
   const listing = await prisma.listing.create({
     data: {
       providerId: user.id,
       title: data.title,
       description: data.description,
-      category: data.category,
+      category,
       price: data.price,
       roomType: data.roomType,
       tags: data.tags as never,
@@ -105,7 +110,7 @@ export async function createListing(
     await embedAndStoreListing(listing.id, {
       title: data.title,
       description: data.description,
-      category: data.category,
+      category,
       roomType: data.roomType,
       price: data.price,
       tags: data.tags as ListingTag[],
