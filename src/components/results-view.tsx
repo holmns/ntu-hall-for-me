@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -7,10 +8,12 @@ import {
   useEffect,
   useRef,
   useState,
+  useTransition,
   type ReactNode,
 } from "react";
 
 import { ResultsMap, type MapPin } from "./results-map";
+import { decodeArea, encodeArea, type AreaPoint } from "@/lib/area-filter";
 
 /**
  * Which room is currently "live" across the browse page, and what caused it.
@@ -44,7 +47,12 @@ function useSelection(): SelectionApi {
  * `children` is the server-rendered card list, passed straight through, so
  * everything the results page streams (reasons arriving into per-card Suspense
  * boundaries) keeps working untouched. This component only adds the map column
- * and the selection that links the two.
+ * and the state that links the two.
+ *
+ * It also owns the drawn boundary, even though the map is what draws it. The
+ * boundary is a URL change, and a URL change re-runs the whole search - so the
+ * component that can dim the list and keep the map steady while that happens
+ * is the one that should be starting it.
  */
 export function ResultsView({
   pins,
@@ -53,8 +61,18 @@ export function ResultsView({
   pins: MapPin[];
   children: ReactNode;
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [selection, setSelection] = useState<Selection>(null);
   const [mapOpen, setMapOpen] = useState(true);
+  const [pending, startTransition] = useTransition();
+  const [draft, setDraft] = useState<AreaPoint[] | null>(null);
+
+  const areaParam = searchParams.get("area");
+  // While the search is in flight, show the shape the seeker just drew rather
+  // than the one still in the URL. `pending` clearing is what hands control
+  // back to the URL, so this cannot get stuck out of sync.
+  const area = pending ? draft : decodeArea(areaParam);
 
   const select = useCallback((id: string, source: "map" | "list") => {
     setSelection({ id, source });
@@ -75,8 +93,30 @@ export function ResultsView({
     [],
   );
 
-  // The map renders even with no rooms to plot: a search narrowed to nothing
-  // is exactly when the seeker needs the boundary tool to widen it again.
+  /**
+   * Push the boundary into the URL.
+   *
+   * Inside a transition on purpose: that is what lets React keep the current
+   * map and results on screen while the new ones load, instead of tearing the
+   * page down to a Suspense fallback. The results page must not put a `key` on
+   * its Suspense boundary or this stops working - a keyed boundary remounts,
+   * and a remount always shows the fallback.
+   */
+  const applyArea = useCallback(
+    (points: AreaPoint[] | null) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (points) params.set("area", encodeArea(points));
+      else params.delete("area");
+      const query = params.toString();
+
+      setDraft(points);
+      startTransition(() => {
+        router.push(query ? `/search?${query}` : "/search");
+      });
+    },
+    [router, searchParams],
+  );
+
   return (
     <SelectionContext.Provider value={{ selection, select, clear }}>
       {/* Map first in the source and on the left at desktop widths, the way a
@@ -109,14 +149,23 @@ export function ResultsView({
                 pins={pins}
                 selectedId={selection?.id ?? null}
                 onSelect={onMapSelect}
+                area={area}
+                onAreaChange={applyArea}
+                busy={pending}
               />
             </div>
           </div>
         </div>
 
         {/* The only thing that scrolls on desktop. `pr-1` keeps the scrollbar
-            off the cards' right edge. */}
-        <div className="min-w-0 lg:h-full lg:overflow-y-auto lg:pr-1">
+            off the cards' right edge. Dimmed rather than replaced while a new
+            search runs, so the page never goes blank under the reader. */}
+        <div
+          aria-busy={pending}
+          className={`min-w-0 transition-opacity lg:h-full lg:overflow-y-auto lg:pr-1 ${
+            pending ? "pointer-events-none opacity-45" : ""
+          }`}
+        >
           {children}
           <p className="mt-6 hidden border-t border-line pt-4 text-xs leading-relaxed text-ink-faint lg:block">
             NTU Room Finder is a student project. Listings are posted by users

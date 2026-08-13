@@ -96,11 +96,14 @@ export default async function SearchPage(props: PageProps<"/search">) {
         }}
       />
 
+      {/* Deliberately unkeyed. A key here would remount the boundary on every
+          search, and a remount always shows the fallback - which tore the map
+          off the page for a second every time someone drew an area or changed
+          a filter. Unkeyed, and with the navigations started inside a
+          transition, React holds the previous results on screen until the new
+          ones are ready. The fallback below is now only for a cold load. */}
       <div className="mt-4 min-h-0 flex-1">
-        <Suspense
-          key={`${query}|${JSON.stringify(chips)}`}
-          fallback={<ResultsSkeleton query={query} />}
-        >
+        <Suspense fallback={<ResultsSkeleton query={query} />}>
           <Results query={query} chips={chips} backTo={currentUrl(sp)} />
         </Suspense>
       </div>
@@ -295,28 +298,37 @@ async function ReasonFailureNotice({ state }: { state: Promise<ReasonState> }) {
   );
 }
 
+/**
+ * Cold load only - every later search keeps the previous results on screen.
+ * Mirrors the real two-column shape so the page does not visibly reflow from a
+ * single column into a map beside a list the moment the data lands.
+ */
 function ResultsSkeleton({ query }: { query: string }) {
   return (
-    <div className="mt-6">
-      <div className="card flex items-center gap-3 px-4 py-3">
-        <span className="h-2 w-2 animate-pulse rounded-full bg-brand" />
-        <span className="text-[13px] text-ink-soft">
-          {query.trim()
-            ? "Reading your request and finding rooms..."
-            : "Loading rooms..."}
-        </span>
-      </div>
-      <div className="mt-4 grid gap-3">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="card p-5">
-            <div className="flex justify-between gap-4">
-              <div className="h-4 w-2/5 animate-pulse rounded bg-surface-muted" />
-              <div className="h-4 w-16 animate-pulse rounded bg-surface-muted" />
+    <div className="grid gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_minmax(380px,480px)] lg:gap-5">
+      <div className="hidden rounded-xl border border-line bg-surface-muted lg:block lg:h-full" />
+
+      <div className="min-w-0">
+        <div className="card flex items-center gap-3 px-4 py-3">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-brand" />
+          <span className="text-[13px] text-ink-soft">
+            {query.trim()
+              ? "Reading your request and finding rooms..."
+              : "Loading rooms..."}
+          </span>
+        </div>
+        <div className="mt-3 grid gap-3">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="card p-5">
+              <div className="flex justify-between gap-4">
+                <div className="h-4 w-2/5 animate-pulse rounded bg-surface-muted" />
+                <div className="h-4 w-16 animate-pulse rounded bg-surface-muted" />
+              </div>
+              <div className="mt-3 h-3 w-3/5 animate-pulse rounded bg-surface-muted" />
+              <div className="mt-4 h-9 w-full animate-pulse rounded-lg bg-surface-muted" />
             </div>
-            <div className="mt-3 h-3 w-3/5 animate-pulse rounded bg-surface-muted" />
-            <div className="mt-4 h-9 w-full animate-pulse rounded-lg bg-surface-muted" />
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );

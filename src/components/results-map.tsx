@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -19,12 +18,7 @@ import {
   type MapType,
 } from "./map-options";
 import { NTU_CAMPUS, NTU_CAMPUS_OUTLINE } from "@/lib/constants";
-import {
-  areaBounds,
-  decodeArea,
-  encodeArea,
-  type AreaPoint,
-} from "@/lib/area-filter";
+import { areaBounds, type AreaPoint } from "@/lib/area-filter";
 
 /**
  * Everything the map needs about one room. Built server-side so the client
@@ -115,16 +109,21 @@ export function ResultsMap({
   pins,
   selectedId,
   onSelect,
+  area,
+  onAreaChange,
+  busy = false,
 }: {
   pins: MapPin[];
   selectedId: string | null;
   /** `null` clears the selection, e.g. a click on empty map. */
   onSelect: (id: string | null) => void;
+  /** The boundary in force, owned by `ResultsView`. */
+  area: AreaPoint[] | null;
+  /** `null` removes the boundary. */
+  onAreaChange: (points: AreaPoint[] | null) => void;
+  /** A search is running for a boundary that was just drawn. */
+  busy?: boolean;
 }) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const areaParam = searchParams.get("area");
-
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<GMap | null>(null);
   // Created lazily inside an effect rather than during render: these entries
@@ -150,11 +149,17 @@ export function ResultsMap({
   useEffect(() => {
     pinsRef.current = pins;
   }, [pins]);
-  const area = decodeArea(areaParam);
   const areaRef = useRef(area);
   useEffect(() => {
-    areaRef.current = decodeArea(areaParam);
-  }, [areaParam]);
+    areaRef.current = area;
+  }, [area]);
+  const onAreaChangeRef = useRef(onAreaChange);
+  useEffect(() => {
+    onAreaChangeRef.current = onAreaChange;
+  }, [onAreaChange]);
+  // Stable identity for effects that must re-run when the shape changes but
+  // not when an equal array is rebuilt by a parent render.
+  const areaKey = area ? area.map((p) => `${p.lat},${p.lng}`).join(";") : "";
 
   /**
    * Frame the map on the rooms.
@@ -186,19 +191,6 @@ export function ResultsMap({
     // A single room fits to a point, which Maps reads as maximum zoom.
     if (list.length === 1 && (map.getZoom() ?? 0) > 16) map.setZoom(16);
   }, []);
-
-  // The boundary lives in the URL, so drawing one is a navigation like any
-  // other filter change: shareable, reloadable, and undone by the back button.
-  const applyArea = useCallback(
-    (points: AreaPoint[] | null) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (points) params.set("area", encodeArea(points));
-      else params.delete("area");
-      const query = params.toString();
-      router.push(query ? `/search?${query}` : "/search");
-    },
-    [router, searchParams],
-  );
 
   // Build the map once. Markers and overlays are attached by the effects below.
   useEffect(() => {
@@ -302,9 +294,9 @@ export function ResultsMap({
       cancelled = true;
       overlay?.setMap(null);
     };
-    // `area` is derived from areaParam, which is the stable dependency.
+    // `area` is intentionally absent: areaKey is its stable identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [areaParam, status, apiKey]);
+  }, [areaKey, status, apiKey]);
 
   // Draw mode. Freehand rather than click-per-vertex: "the area I want" is a
   // gesture, not a list of corners. Panning is switched off for the duration
@@ -371,7 +363,7 @@ export function ResultsMap({
             return;
           }
           setDrawing(false);
-          applyArea(thin(points));
+          onAreaChangeRef.current(thin(points));
         }),
       );
     });
@@ -387,7 +379,7 @@ export function ResultsMap({
         draggableCursor: null,
       });
     };
-  }, [drawing, status, apiKey, applyArea]);
+  }, [drawing, status, apiKey]);
 
   // Rebuild the marker layer whenever the result set changes, and frame it.
   // Keyed on the id list rather than the array identity, which is new on every
@@ -421,11 +413,11 @@ export function ResultsMap({
 
       fitToPins();
     });
-    // `pins` is intentionally absent: pinKey is its stable identity. areaParam
+    // `pins` is intentionally absent: pinKey is its stable identity. areaKey
     // is here for the one case pinKey misses - a boundary redrawn from no
     // results to no results, where only the shape to frame has changed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, apiKey, pinKey, areaParam, fitToPins]);
+  }, [status, apiKey, pinKey, areaKey, fitToPins]);
 
   // Re-frame when the map's box actually changes size - the first real layout
   // after mount, the mobile map toggle, a window resize. Panning does not
@@ -512,15 +504,20 @@ export function ResultsMap({
             hasArea={area != null}
             onStart={() => setDrawing(true)}
             onCancel={() => setDrawing(false)}
-            onClear={() => applyArea(null)}
+            onClear={() => onAreaChange(null)}
           />
         </div>
       )}
 
-      {drawing && (
+      {(drawing || busy) && (
         <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-20">
-          <p className="rounded-full bg-ink/85 px-3.5 py-1.5 text-[12px] font-medium text-white shadow-[0_2px_10px_rgba(28,26,23,0.25)]">
-            Drag on the map to draw the area you want
+          <p className="flex items-center gap-2 rounded-full bg-ink/85 px-3.5 py-1.5 text-[12px] font-medium text-white shadow-[0_2px_10px_rgba(28,26,23,0.25)]">
+            {busy && (
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+            )}
+            {busy
+              ? "Finding rooms in that area..."
+              : "Drag on the map to draw the area you want"}
           </p>
         </div>
       )}
