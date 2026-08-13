@@ -74,8 +74,9 @@ model User {
   accounts         Account[]
   sessions         Session[]
   listings         Listing[]
-  sentMessages     Message[] @relation("SentMessages")
-  receivedMessages Message[] @relation("ReceivedMessages")
+  saved            SavedListing[]
+  sentMessages     Message[]      @relation("SentMessages")
+  receivedMessages Message[]      @relation("ReceivedMessages")
 }
 
 model Account {
@@ -165,9 +166,29 @@ model Listing {
   provider User           @relation(fields: [providerId], references: [id], onDelete: Cascade)
   messages Message[]
   images   ListingImage[]
+  savedBy  SavedListing[]
 
   @@index([status, category, price])
   @@index([providerId])
+}
+
+/// A room a seeker bookmarked.
+///
+/// Private to the seeker: the provider is not told, and nothing about saving
+/// feeds back into ranking. It is a shortlist, not a signal.
+model SavedListing {
+  id        String   @id @default(cuid())
+  userId    String
+  listingId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  /// One save per person per room, and the upsert key the toggle relies on.
+  @@unique([userId, listingId])
+  /// Most recently saved first, which is the order the saved list renders in.
+  @@index([userId, createdAt])
 }
 
 /// One photo of a listing. The bytes live in Supabase Storage (public bucket

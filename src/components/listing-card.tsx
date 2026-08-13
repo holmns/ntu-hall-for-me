@@ -119,31 +119,52 @@ export function ListingCard({
   reason,
   rank,
   mode = "transit",
+  save,
+  unavailable = false,
 }: {
   listing: ListingWithProvider;
   /** Already wrapped in `ReasonPill` by the caller, or absent. */
   reason?: ReactNode;
   rank?: number;
   mode?: TravelMode;
+  /** A `SaveButton`, laid over the cover. Absent leaves the card as it was. */
+  save?: ReactNode;
+  /** Withdrawn since it was saved. Only `/saved` ever renders one of these. */
+  unavailable?: boolean;
 }) {
   const tags = listing.tags as ListingTag[];
 
   return (
-    <Link
-      href={`/listings/${listing.id}`}
-      className="card group block p-4 transition-all hover:border-line-strong hover:shadow-[0_2px_12px_rgba(28,26,23,0.06)] sm:p-5"
-    >
+    // Not a <Link> wrapper: the save button is interactive and cannot be
+    // nested inside an anchor, so the link is stretched over the card instead
+    // and the button sits above it.
+    <article className="card group relative p-4 transition-all hover:border-line-strong hover:shadow-[0_2px_12px_rgba(28,26,23,0.06)] sm:p-5">
+      <Link
+        href={`/listings/${listing.id}`}
+        className="absolute inset-0 rounded-card"
+      >
+        <span className="sr-only">{listing.title}</span>
+      </Link>
+
       <div className="flex items-start gap-3">
         {rank != null && (
           <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-soft text-xs font-semibold text-brand tabular-nums">
             {rank}
           </span>
         )}
-        <CardCover listing={listing} />
+        <div className="relative shrink-0">
+          <CardCover listing={listing} />
+          {save && <div className="absolute right-1 top-1 z-10">{save}</div>}
+        </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-4">
             <h3 className="text-[15px] font-semibold leading-snug text-ink group-hover:text-brand">
               {listing.title}
+              {unavailable && (
+                <span className="ml-2 whitespace-nowrap rounded-full bg-surface-muted px-2 py-0.5 align-middle text-[11px] font-medium text-ink-faint">
+                  No longer listed
+                </span>
+              )}
             </h3>
             <div className="shrink-0 text-right">
               <div className="text-[15px] font-semibold tabular-nums text-ink">
@@ -177,6 +198,6 @@ export function ListingCard({
           )}
         </div>
       </div>
-    </Link>
+    </article>
   );
 }

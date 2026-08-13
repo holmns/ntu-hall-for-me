@@ -4,9 +4,11 @@ import { notFound } from "next/navigation";
 import { ListingMap } from "@/components/listing-map";
 import { ListingGallery } from "@/components/listing-gallery";
 import { TagPill } from "@/components/listing-card";
+import { SaveButton } from "@/components/save-button";
 import { prisma } from "@/lib/prisma";
 import { LISTING_IMAGE_SELECT } from "@/lib/images";
 import { getCurrentUser } from "@/lib/auth";
+import { isSaved } from "@/lib/saved";
 import {
   CATEGORY_LABELS,
   ON_CAMPUS_DISCLAIMER,
@@ -35,6 +37,7 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
   // deserves a better answer than a bare 404.
   if (listing.status !== "ACTIVE" && !isOwner) return <Withdrawn />;
 
+  const saved = await isSaved(user?.id, listing.id);
   const tags = listing.tags as ListingTag[];
   const onCampus = listing.category === "ON_CAMPUS";
 
@@ -218,20 +221,30 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
                     All your listings
                   </Link>
                 </div>
-              ) : user ? (
-                <Link
-                  href={`/messages/${listing.id}/${listing.providerId}`}
-                  className="btn-primary w-full"
-                >
-                  Message provider
-                </Link>
               ) : (
-                <Link
-                  href={`/signin?callbackUrl=/listings/${listing.id}`}
-                  className="btn-primary w-full"
-                >
-                  Sign in to message
-                </Link>
+                <div className="space-y-2">
+                  {user ? (
+                    <Link
+                      href={`/messages/${listing.id}/${listing.providerId}`}
+                      className="btn-primary w-full"
+                    >
+                      Message provider
+                    </Link>
+                  ) : (
+                    <Link
+                      href={`/signin?callbackUrl=/listings/${listing.id}`}
+                      className="btn-primary w-full"
+                    >
+                      Sign in to message
+                    </Link>
+                  )}
+                  <SaveButton
+                    listingId={listing.id}
+                    saved={saved}
+                    signedIn={user != null}
+                    variant="labelled"
+                  />
+                </div>
               )}
             </div>
           </div>

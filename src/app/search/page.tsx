@@ -4,7 +4,10 @@ import { SearchBar } from "@/components/search-bar";
 import { ListingCard, ReasonPill } from "@/components/listing-card";
 import { IntentPanel } from "@/components/intent-panel";
 import { ResultsView, SelectableCard } from "@/components/results-view";
+import { SaveButton } from "@/components/save-button";
 import type { MapPin } from "@/components/results-map";
+import { getCurrentUser } from "@/lib/auth";
+import { savedIdsAmong } from "@/lib/saved";
 import { ROOM_TYPE_LABELS, TRAVEL_MODE_LABELS } from "@/lib/constants";
 import {
   commuteMinutes,
@@ -53,6 +56,17 @@ function parseChips(sp: Record<string, string | string[] | undefined>): ChipFilt
   };
 }
 
+/** This exact search, so signing in from a save button comes back to it. */
+function currentUrl(sp: Record<string, string | string[] | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(sp)) {
+    if (typeof value === "string") params.set(key, value);
+    else if (Array.isArray(value) && value[0]) params.set(key, value[0]);
+  }
+  const query = params.toString();
+  return query ? `/search?${query}` : "/search";
+}
+
 export default async function SearchPage(props: PageProps<"/search">) {
   const sp = await props.searchParams;
   const query = (Array.isArray(sp.q) ? sp.q[0] : sp.q) ?? "";
@@ -74,7 +88,7 @@ export default async function SearchPage(props: PageProps<"/search">) {
         key={`${query}|${JSON.stringify(chips)}`}
         fallback={<ResultsSkeleton query={query} />}
       >
-        <Results query={query} chips={chips} />
+        <Results query={query} chips={chips} backTo={currentUrl(sp)} />
       </Suspense>
     </div>
   );
@@ -83,15 +97,25 @@ export default async function SearchPage(props: PageProps<"/search">) {
 async function Results({
   query,
   chips,
+  backTo,
 }: {
   query: string;
   chips: ChipFilters;
+  backTo: string;
 }) {
   const { intent, listings, reasons, relaxations } = await searchListings(
     query,
     chips,
   );
   const mode = intent.travelMode ?? "transit";
+
+  // After the search, so the shortlist lookup is one indexed query over the
+  // ids actually being rendered rather than over everything the user saved.
+  const user = await getCurrentUser();
+  const savedIds = await savedIdsAmong(
+    user?.id,
+    listings.map((l) => l.id),
+  );
 
   // Settled once, here, so all the card boundaries below share a single call
   // and a failure becomes data instead of a thrown error.
@@ -155,6 +179,14 @@ async function Results({
                   }
                   rank={query.trim() ? index + 1 : undefined}
                   mode={mode}
+                  save={
+                    <SaveButton
+                      listingId={listing.id}
+                      saved={savedIds.has(listing.id)}
+                      signedIn={user != null}
+                      callbackUrl={backTo}
+                    />
+                  }
                 />
               </SelectableCard>
             ))}
