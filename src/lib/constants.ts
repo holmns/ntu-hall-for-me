@@ -15,22 +15,57 @@ export const SEARCH_BIAS_RADIUS_M = 8000;
  * Outline of the NTU Yunnan Garden campus, drawn on every map so "on campus"
  * is something you can see rather than a label you have to trust.
  *
- * Hand-traced and approximate: it encloses the halls, the academic spines and
- * NIE with a little margin, and it is for orientation only. It is **not** used
- * to decide whether a listing is on campus - that is the provider's `category`
- * choice, and moving these numbers must never start changing search results.
+ * Traced by hand off satellite imagery, so it follows the real perimeter -
+ * Nanyang Ave round the halls, the academic spine, NIE - rather than boxing
+ * the campus in. It is still orientation only: it is **not** used to decide
+ * whether a listing is on campus, that is the provider's `category` choice,
+ * and moving these numbers must never start changing search results.
  */
 export const NTU_CAMPUS_OUTLINE: { lat: number; lng: number }[] = [
-  { lat: 1.3560, lng: 103.6805 },
-  { lat: 1.3556, lng: 103.6862 },
-  { lat: 1.3528, lng: 103.6916 },
-  { lat: 1.3482, lng: 103.6935 },
-  { lat: 1.3441, lng: 103.6912 },
-  { lat: 1.3410, lng: 103.6862 },
-  { lat: 1.3404, lng: 103.6808 },
-  { lat: 1.3424, lng: 103.6762 },
-  { lat: 1.3478, lng: 103.6742 },
-  { lat: 1.3529, lng: 103.6762 },
+  { lat: 1.35488, lng: 103.68343 },
+  { lat: 1.35417, lng: 103.68246 },
+  { lat: 1.35293, lng: 103.68098 },
+  { lat: 1.35229, lng: 103.68033 },
+  { lat: 1.35160, lng: 103.67968 },
+  { lat: 1.35179, lng: 103.67952 },
+  { lat: 1.35213, lng: 103.67893 },
+  { lat: 1.35172, lng: 103.67857 },
+  { lat: 1.35127, lng: 103.67852 },
+  { lat: 1.35125, lng: 103.67782 },
+  { lat: 1.35090, lng: 103.67694 },
+  { lat: 1.35007, lng: 103.67618 },
+  { lat: 1.34884, lng: 103.67596 },
+  { lat: 1.34749, lng: 103.67643 },
+  { lat: 1.34691, lng: 103.67730 },
+  { lat: 1.34650, lng: 103.67766 },
+  { lat: 1.34632, lng: 103.67826 },
+  { lat: 1.34590, lng: 103.67824 },
+  { lat: 1.34545, lng: 103.67798 },
+  { lat: 1.34399, lng: 103.67839 },
+  { lat: 1.34310, lng: 103.67889 },
+  { lat: 1.34270, lng: 103.67905 },
+  { lat: 1.34241, lng: 103.67901 },
+  { lat: 1.34171, lng: 103.67879 },
+  { lat: 1.34019, lng: 103.67868 },
+  { lat: 1.33957, lng: 103.67897 },
+  { lat: 1.33956, lng: 103.68037 },
+  { lat: 1.33966, lng: 103.68151 },
+  { lat: 1.34001, lng: 103.68242 },
+  { lat: 1.34474, lng: 103.68855 },
+  { lat: 1.34617, lng: 103.69031 },
+  { lat: 1.34670, lng: 103.69077 },
+  { lat: 1.34720, lng: 103.69040 },
+  { lat: 1.34742, lng: 103.68980 },
+  { lat: 1.34960, lng: 103.68981 },
+  { lat: 1.35571, lng: 103.69021 },
+  { lat: 1.35661, lng: 103.69005 },
+  { lat: 1.35650, lng: 103.68967 },
+  { lat: 1.35625, lng: 103.68926 },
+  { lat: 1.35577, lng: 103.68848 },
+  { lat: 1.35693, lng: 103.68805 },
+  { lat: 1.35686, lng: 103.68722 },
+  { lat: 1.35652, lng: 103.68624 },
+  { lat: 1.35583, lng: 103.68485 },
 ];
 
 export const TAG_LABELS: Record<ListingTag, string> = {
