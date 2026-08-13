@@ -1,8 +1,13 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition, ViewTransition } from "react";
 
+import {
+  endSearch,
+  startSearch,
+  useSearchRunning,
+} from "@/components/search-progress";
 import { CATEGORY_LABELS, ROOM_TYPE_LABELS } from "@/lib/constants";
 import type { ListingCategory, RoomType } from "@/generated/prisma/enums";
 
@@ -31,8 +36,10 @@ export function SearchBar({
   autoFocus?: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const running = useSearchRunning();
   const [values, setValues] = useState<SearchBarValues>({
     q: initial?.q ?? "",
     category: initial?.category ?? "",
@@ -46,8 +53,8 @@ export function SearchBar({
 
   function submit(overrideQuery?: string) {
     const params = new URLSearchParams();
-    const q = overrideQuery ?? values.q;
-    if (q.trim()) params.set("q", q.trim());
+    const q = (overrideQuery ?? values.q).trim();
+    if (q) params.set("q", q);
     if (values.category) params.set("category", values.category);
     if (values.roomType) params.set("roomType", values.roomType);
     if (values.minPrice) params.set("min", values.minPrice);
@@ -56,10 +63,29 @@ export function SearchBar({
     // in this form, and a new search must not silently throw it away.
     const area = searchParams?.get("area");
     if (area) params.set("area", area);
+    // Only a search with words in it lights the box. An empty box orders the
+    // rooms by date and calls no model at all - no parse, no embedding, no
+    // reasons - so a glow there would be claiming work that is not happening.
+    // The `else` matters as much as the `if`: submitting an empty box after a
+    // search is a decision to stop searching, and it has to put out a glow it
+    // did not light.
+    //
+    // Outside the transition on purpose. Inside it, the glow would be deferred
+    // along with the navigation and would not appear until the browse page was
+    // ready - which is the moment it has the least to say. The pipeline starts
+    // on the same click, so the box lights up the instant it starts waiting.
+    if (q) startSearch();
+    else endSearch();
     startTransition(() => {
       router.push(`/search?${params.toString()}`);
     });
   }
+
+  // The store is global, so a search abandoned mid-flight (enter, then a click
+  // on "Post a room") must not leave the box on the landing page glowing about
+  // a search nobody is waiting for any more. Either this box is the one that
+  // just fired, or it is the one on the page the results are coming to.
+  const searching = running && (isPending || pathname === "/search");
 
   const activeFilterCount = [
     values.category,
@@ -85,76 +111,85 @@ export function SearchBar({
           are painted at their natural size against their own edge, so the box
           grows while the text and the buttons stay sharp and simply travel. */}
       <ViewTransition name="search-box" share="search-morph" default="none">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-          className="card flex items-center gap-2 p-2 shadow-[0_1px_3px_rgba(28,26,23,0.05)] focus-within:border-brand focus-within:shadow-[0_0_0_3px_var(--color-brand-soft)]"
-        >
-          <ViewTransition
-            name="search-box-field"
-            share="search-morph"
-            default="none"
+        {/* The shell exists to hold the glow (globals.css draws it as pseudo-
+            elements on this and on the form), and it is what the view
+            transition captures, so the glow travels with the box rather than
+            waiting for it at the far end. Its border box is the form's, so the
+            morph geometry is unchanged. */}
+        <div className="search-box" data-searching={searching ? "" : undefined}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+            className="card flex items-center gap-2 p-2 shadow-[0_1px_3px_rgba(28,26,23,0.05)] focus-within:border-brand focus-within:shadow-[0_0_0_3px_var(--color-brand-soft)]"
           >
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <svg
-                viewBox="0 0 20 20"
-                className="ml-2 h-4.5 w-4.5 shrink-0 text-ink-faint"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
-              >
-                <circle cx="9" cy="9" r="6" />
-                <path d="m14 14 4 4" strokeLinecap="round" />
-              </svg>
-              <input
-                type="text"
-                value={values.q}
-                onChange={(e) => setValues((v) => ({ ...v, q: e.target.value }))}
-                placeholder="Describe the room you want, in your own words"
-                aria-label="Describe the room you want"
-                autoFocus={autoFocus}
-                className="min-w-0 flex-1 bg-transparent py-1.5 text-[15px] text-ink outline-none placeholder:text-ink-faint"
-              />
-            </div>
-          </ViewTransition>
+            <ViewTransition
+              name="search-box-field"
+              share="search-morph"
+              default="none"
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <svg
+                  viewBox="0 0 20 20"
+                  className="ml-2 h-4.5 w-4.5 shrink-0 text-ink-faint"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <circle cx="9" cy="9" r="6" />
+                  <path d="m14 14 4 4" strokeLinecap="round" />
+                </svg>
+                <input
+                  type="text"
+                  value={values.q}
+                  onChange={(e) =>
+                    setValues((v) => ({ ...v, q: e.target.value }))
+                  }
+                  placeholder="Describe the room you want, in your own words"
+                  aria-label="Describe the room you want"
+                  autoFocus={autoFocus}
+                  className="min-w-0 flex-1 bg-transparent py-1.5 text-[15px] text-ink outline-none placeholder:text-ink-faint"
+                />
+              </div>
+            </ViewTransition>
 
-          <ViewTransition
-            name="search-box-actions"
-            share="search-morph"
-            default="none"
-          >
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setFiltersOpen((o) => !o)}
-                aria-expanded={filtersOpen}
-                className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[13px] text-ink-soft transition-colors hover:bg-surface-muted sm:inline-flex"
-              >
-                Filters
-                {activeFilterCount > 0 && (
-                  <span className="grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[10px] font-semibold text-white tabular-nums">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-              {/* Wide enough for "Searching" at rest, so swapping the label
-                  does not resize the button. It shares a snapshot with the
-                  Filters button, which is pinned to the box's right edge - a
-                  22px jump here would slide Filters out from under itself
-                  halfway through the morph. */}
-              <button
-                type="submit"
-                disabled={isPending}
-                className="btn-primary min-w-[7rem] shrink-0"
-              >
-                {isPending ? "Searching" : "Search"}
-              </button>
-            </div>
-          </ViewTransition>
-        </form>
+            <ViewTransition
+              name="search-box-actions"
+              share="search-morph"
+              default="none"
+            >
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpen((o) => !o)}
+                  aria-expanded={filtersOpen}
+                  className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[13px] text-ink-soft transition-colors hover:bg-surface-muted sm:inline-flex"
+                >
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[10px] font-semibold text-white tabular-nums">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+                {/* Wide enough for "Searching" at rest, so swapping the label
+                    does not resize the button. It shares a snapshot with the
+                    Filters button, which is pinned to the box's right edge - a
+                    22px jump here would slide Filters out from under itself
+                    halfway through the morph. */}
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="btn-primary min-w-[7rem] shrink-0"
+                >
+                  {isPending ? "Searching" : "Search"}
+                </button>
+              </div>
+            </ViewTransition>
+          </form>
+        </div>
       </ViewTransition>
 
       <button

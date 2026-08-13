@@ -166,8 +166,14 @@
      a linear move over this distance reads as a slide rather than as the box
      having weight. */
   animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
-  /* The box grows to full width; its old, narrower snapshot must not spill out
-     of it on the way. */
+}
+
+/* Only the two that are painted at natural size (below) can spill: at the start
+   of the flight the wider of the pair reaches past the box it is travelling in.
+   The box group must NOT clip - the glow around a searching box lives outside
+   its border box, and clipping here puts the box out for the whole flight. */
+::view-transition-group(search-box-field),
+::view-transition-group(search-box-actions) {
   overflow: hidden;
 }
 
@@ -234,6 +240,170 @@
   ::view-transition-new(*) {
     animation-duration: 1ms !important;
     animation-delay: 0s !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The search box while a search is running
+
+   A search takes three or four seconds - a model reads the query, a vector
+   comparison shortlists rooms, a second model ranks them - and for most of that
+   the page has nothing to show. The box that was just typed into is the thing
+   the seeker is still looking at, so it is the thing that says it is working:
+   a colour drifting around its edge, spilling out onto the page behind it and
+   in over its own face, all of it stopping the moment the rooms land. Wired up
+   in src/components/search-progress.tsx.
+
+   Three layers, because a lit object is not an outline. Reading outwards from
+   the middle: light on the inside face falling away towards the centre, the lit
+   edge itself, and the spill it throws onto whatever the box is sitting on.
+   None of them is at full strength - the box is meant to look lit, not to look
+   like a neon sign, so each layer is a wash and the effect comes from there
+   being three of them.
+
+   Deliberately unlayered. Tailwind's utilities all sit in a layer, so these
+   rules win without !important - which is what lets the searching state switch
+   off the form's own focus ring below.
+--------------------------------------------------------------------------- */
+.search-box {
+  position: relative;
+  /* The outer two layers are pushed behind the form with a negative z-index,
+     and a stacking context here is what keeps "behind" meaning behind the form
+     rather than behind whichever ancestor happens to be painting. */
+  isolation: isolate;
+}
+
+/* The inner layer is the form's own, because it has to land on top of the
+   form's opaque background rather than behind it. Positioning the form and its
+   two children is what orders them: all three are then positioned elements
+   painted in tree order, so the light goes over the background and the query
+   text goes over the light. */
+.search-box > form {
+  position: relative;
+}
+
+.search-box > form > div {
+  position: relative;
+}
+
+.search-box::before,
+.search-box::after,
+.search-box > form::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  /* Slower off than on (the shorter duration is set with the searching state
+     below): the box has to answer the keypress immediately, while the arrival
+     of the rooms is already an event and a glow that snaps off adds a flinch
+     to it. */
+  transition: opacity 420ms ease-out;
+
+  /* Built around the app's own two colours - the NTU red it uses for actions
+     and the teal it uses for on-campus - rather than a stock rainbow, so the
+     box still looks like it belongs to this page while it is lit. The first and
+     last stop are the same colour, which is what lets the band tile and travel
+     without a seam.
+     `in oklch` is not decoration: interpolated in sRGB, the teal-to-red step
+     runs in a straight line through the middle of the colour cube and comes out
+     grey, which put a dead band across the widest part of the bar. Interpolated
+     round the hue circle instead, every step stays saturated. The amber stop is
+     there to steer that last step through warm hues rather than green. */
+  background-image: linear-gradient(
+    90deg in oklch,
+    #b3202f,
+    #e0559a,
+    #8b5cf6,
+    #3b9ff0,
+    #14b8a6,
+    #f0a23c,
+    #b3202f
+  );
+  /* Two element-widths per tile, so one full cycle is a shift of exactly one
+     tile and the loop is invisible. */
+  background-size: 200% 100%;
+  animation: search-glow-travel 4s linear infinite;
+  animation-play-state: paused;
+}
+
+/* The spill: light thrown onto the page around the box. Wide and weak rather
+   than tight and bright - a close, strong halo reads as a second border drawn
+   in colour, and what this wants to look like is the surface behind the box
+   catching some of the light. A gaussian blur of a plain rounded rectangle
+   gives the falloff for free, brightest where it meets the box. */
+.search-box::before {
+  z-index: -2;
+  inset: -12px;
+  border-radius: 26px;
+  filter: blur(18px);
+}
+
+/* The edge itself. 1.5px of colour exactly where the form's own border is,
+   which is why that border is turned transparent while this is showing - two
+   outlines a hair apart read as a rendering fault, not as one glowing box. */
+.search-box::after {
+  z-index: -1;
+  inset: -1.5px;
+  border-radius: 15.5px;
+}
+
+/* The inside face. Same travelling colour, masked to hug the edge and fall away
+   before it reaches the query text - light coming in off a lit rim, not a
+   tinted box. The mask is two soft-edged bands unioned (the default
+   `mask-composite: add`) rather than a blur, so nothing bleeds back out through
+   the border and doubles up with the spill.
+   `inset: -1px` puts it over the border box, not the padding box: at `0` the
+   form's 1px of transparent border leaves a white hairline between this and the
+   edge above. */
+.search-box > form::before {
+  inset: -1px;
+  border-radius: 14px;
+  mask-image:
+    linear-gradient(to bottom, #000, transparent 26%, transparent 74%, #000),
+    linear-gradient(to right, #000, transparent 5%, transparent 95%, #000);
+}
+
+.search-box[data-searching]::before {
+  opacity: 0.15;
+  animation-play-state: running;
+  transition-duration: 140ms;
+}
+
+.search-box[data-searching]::after {
+  opacity: 0.8;
+  animation-play-state: running;
+  transition-duration: 140ms;
+}
+
+.search-box[data-searching] > form::before {
+  opacity: 0.28;
+  animation-play-state: running;
+  transition-duration: 140ms;
+}
+
+.search-box[data-searching] > form {
+  border-color: transparent;
+  /* The focus ring is a 3px brand-soft halo and the box is still focused while
+     the search runs, so it would sit on top of the gradient. */
+  box-shadow: none;
+}
+
+@keyframes search-glow-travel {
+  to {
+    background-position: 200% 0;
+  }
+}
+
+/* Motion is the whole point here, but the state is not: hold the gradient
+   still and let the colour alone say a search is running. */
+@media (prefers-reduced-motion: reduce) {
+  .search-box::before,
+  .search-box::after,
+  .search-box > form::before,
+  .search-box[data-searching]::before,
+  .search-box[data-searching]::after,
+  .search-box[data-searching] > form::before {
+    animation: none;
   }
 }
 

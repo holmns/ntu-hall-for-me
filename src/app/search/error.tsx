@@ -4,6 +4,7 @@ import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { SearchBar } from "@/components/search-bar";
+import { SearchSettled } from "@/components/search-progress";
 import type { ListingCategory, RoomType } from "@/generated/prisma/enums";
 
 /**
@@ -28,6 +29,11 @@ export default function SearchError({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+      {/* A search that failed is a search that has finished. Without this the
+          box would sit here glowing over an error message, still promising
+          rooms that are never coming. */}
+      <SearchSettled />
+
       <Suspense fallback={<div className="h-[52px]" />}>
         <RestoredSearchBar />
       </Suspense>

@@ -4,6 +4,7 @@ import { SearchBar } from "@/components/search-bar";
 import { ListingCard, ReasonPill } from "@/components/listing-card";
 import { IntentPanel } from "@/components/intent-panel";
 import { ResultsView, SelectableCard } from "@/components/results-view";
+import { SearchSettled, SearchStarted } from "@/components/search-progress";
 import { SaveButton } from "@/components/save-button";
 import type { MapPin } from "@/components/results-map";
 import { getCurrentUser } from "@/lib/auth";
@@ -180,6 +181,11 @@ async function Results({
     // auto-height wrapper anywhere in this chain and the map stretches to the
     // full height of the card list instead.
     <div className="lg:h-full">
+      {/* The rooms are on screen, so the search box can stop glowing. Here
+          rather than in the page shell because this component is the only one
+          that has actually waited for `searchListings`. */}
+      <SearchSettled />
+
       <ResultsView pins={listings.map((l) => toMapPin(l, mode))}>
         {summary}
 
@@ -309,6 +315,14 @@ async function ReasonFailureNotice({ state }: { state: Promise<ReasonState> }) {
 function ResultsSkeleton({ query }: { query: string }) {
   return (
     <div className="grid gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_minmax(380px,480px)] lg:gap-5">
+      {/* This fallback only ever renders for a search this tab did not start -
+          a shared link, a reload, or Browse in the header - so it is the one
+          place that has to arm the box rather than the other way round. Only
+          when there is something to read, though: browsing with an empty box
+          calls no model, and lighting up for a plain date-ordered list would be
+          the glow's only lie. */}
+      {query.trim() && <SearchStarted />}
+
       <div className="hidden rounded-xl border border-line bg-surface-muted lg:block lg:h-full" />
 
       <div className="min-w-0">
