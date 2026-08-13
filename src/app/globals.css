@@ -138,6 +138,15 @@
   body:has([data-app-shell]) > footer {
     display: none;
   }
+
+  /*
+   * The same page runs edge to edge, so the header bar has to as well. Done
+   * here rather than by passing a prop down: the header is rendered by the
+   * root layout, which does not know which route is below it.
+   */
+  body:has([data-app-shell]) .site-bar {
+    max-width: none;
+  }
 }
 
 /* Hide the number input spinners on the price fields. */

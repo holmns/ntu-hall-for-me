@@ -9,7 +9,10 @@ export async function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-canvas/85 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-6">
+      {/* `site-bar` is the hook globals.css uses to drop the max width on the
+          full-bleed browse page - a 1152px bar of links floating over a map
+          that runs to both edges reads as a broken layout. */}
+      <div className="site-bar mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2 shrink-0">
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand text-[13px] font-bold text-white">
             N

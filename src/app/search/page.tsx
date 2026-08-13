@@ -77,14 +77,17 @@ export default async function SearchPage(props: PageProps<"/search">) {
   const chips = parseChips(sp);
 
   return (
-    // Wider than the rest of the app, and on desktop exactly one viewport tall:
-    // the map fills its column and the results scroll inside theirs, so the map
-    // never slides out of frame while you read. `data-app-shell` is what hides
-    // the site footer for that (see globals.css); the list repeats it at the
-    // end instead. Below lg this is an ordinary scrolling page.
+    // Full-bleed, unlike the rest of the app, and on desktop exactly one
+    // viewport tall: the map fills its column and the results scroll inside
+    // theirs, so the map never slides out of frame while you read. There is no
+    // max width on purpose - every extra pixel goes to the map, which is the
+    // browsing surface. `data-app-shell` is what hides the site footer and
+    // widens the header bar to match (see globals.css); the list repeats the
+    // disclaimer at its end instead. Below lg this is an ordinary scrolling
+    // page.
     <div
       data-app-shell
-      className="mx-auto flex w-full max-w-[1600px] flex-col px-4 py-4 sm:px-6 lg:h-[calc(100vh-3.5rem)]"
+      className="flex w-full flex-col px-4 py-4 sm:px-6 lg:h-[calc(100vh-3.5rem)]"
     >
       <SearchBar
         initial={{
