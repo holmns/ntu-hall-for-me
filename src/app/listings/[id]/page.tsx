@@ -152,6 +152,29 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
               </svg>
               {listing.address}
             </p>
+
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${listing.lat},${listing.lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2.5 inline-flex items-center gap-1.5 text-[13px] font-medium text-brand hover:underline"
+            >
+              Open in Google Maps
+              <svg
+                viewBox="0 0 16 16"
+                className="h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                aria-hidden="true"
+              >
+                <path
+                  d="M6 3H3.5a1 1 0 0 0-1 1v8.5a1 1 0 0 0 1 1H12a1 1 0 0 0 1-1V10M9 3h4v4M13 3 7 9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </a>
           </section>
         </div>
 
