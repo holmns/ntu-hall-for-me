@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { CATEGORY_LABELS, ROOM_TYPE_LABELS } from "@/lib/constants";
@@ -31,6 +31,7 @@ export function SearchBar({
   autoFocus?: boolean;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [values, setValues] = useState<SearchBarValues>({
     q: initial?.q ?? "",
@@ -51,6 +52,10 @@ export function SearchBar({
     if (values.roomType) params.set("roomType", values.roomType);
     if (values.minPrice) params.set("min", values.minPrice);
     if (values.maxPrice) params.set("max", values.maxPrice);
+    // Carried over rather than rebuilt: the boundary is drawn on the map, not
+    // in this form, and a new search must not silently throw it away.
+    const area = searchParams?.get("area");
+    if (area) params.set("area", area);
     startTransition(() => {
       router.push(`/search?${params.toString()}`);
     });

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { DEFAULT_MAP_ID, loadMapClasses } from "@/lib/maps-client";
-import { NTU_CAMPUS } from "@/lib/constants";
+import { NTU_CAMPUS, NTU_CAMPUS_OUTLINE } from "@/lib/constants";
 
 function ntuMarkerDot(): HTMLElement {
   const dot = document.createElement("div");
@@ -36,7 +36,7 @@ export function ListingMap({ lat, lng }: { lat: number; lng: number }) {
     let cancelled = false;
 
     loadMapClasses(apiKey)
-      .then(({ Map, AdvancedMarkerElement }) => {
+      .then(({ Map, AdvancedMarkerElement, Polygon }) => {
         if (cancelled || !ref.current) return;
 
         const map = new Map(ref.current, {
@@ -46,6 +46,20 @@ export function ListingMap({ lat, lng }: { lat: number; lng: number }) {
           disableDefaultUI: true,
           zoomControl: true,
           gestureHandling: "cooperative",
+        });
+
+        // Same campus outline as the browse map. Off screen for a room far
+        // from NTU, which costs nothing, and it is the whole point for a hall.
+        new Polygon({
+          map,
+          paths: NTU_CAMPUS_OUTLINE,
+          strokeColor: "#0f766e",
+          strokeOpacity: 0.75,
+          strokeWeight: 1.5,
+          fillColor: "#0f766e",
+          fillOpacity: 0.1,
+          clickable: false,
+          zIndex: 0,
         });
 
         new AdvancedMarkerElement({ map, position: { lat, lng } });

@@ -8,6 +8,7 @@ import { SaveButton } from "@/components/save-button";
 import type { MapPin } from "@/components/results-map";
 import { getCurrentUser } from "@/lib/auth";
 import { savedIdsAmong } from "@/lib/saved";
+import { decodeArea } from "@/lib/area-filter";
 import { ROOM_TYPE_LABELS, TRAVEL_MODE_LABELS } from "@/lib/constants";
 import {
   commuteMinutes,
@@ -53,6 +54,9 @@ function parseChips(sp: Record<string, string | string[] | undefined>): ChipFilt
       roomType === "SINGLE" || roomType === "SHARED" || roomType === "WHOLE_UNIT"
         ? (roomType as RoomType)
         : null,
+    // A malformed `area` decodes to null, which drops the boundary and shows
+    // everything. Better than an error page over a mangled query string.
+    area: decodeArea(one("area")),
   };
 }
 
@@ -160,35 +164,33 @@ async function Results({
       <h2 className="mt-3 text-sm font-medium text-ink-soft">
         {listings.length} {listings.length === 1 ? "room" : "rooms"}
         {query.trim() ? " for you" : ""}
+        {chips.area ? " in the area you drew" : ""}
       </h2>
     </>
   );
-
-  if (listings.length === 0) {
-    return (
-      <div>
-        {summary}
-        <div className="card mt-3 px-6 py-14 text-center">
-          <p className="text-[15px] font-medium text-ink">No rooms found</p>
-          <p className="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-ink-soft">
-            Nothing is listed that fits those constraints. Try widening the
-            budget or clearing a filter.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     // `lg:h-full` unbroken from the viewport-locked shell down to the map: one
     // auto-height wrapper anywhere in this chain and the map stretches to the
     // full height of the card list instead.
     <div className="lg:h-full">
-      <ResultsView
-        pins={listings.map((l) => toMapPin(l, mode))}
-        signedIn={user != null}
-      >
+      <ResultsView pins={listings.map((l) => toMapPin(l, mode))}>
         {summary}
+
+        {/* Rendered inside ResultsView rather than instead of it: a search
+            narrowed to nothing is exactly when the map and its Clear control
+            need to stay on screen. */}
+        {listings.length === 0 && (
+          <div className="card mt-3 px-6 py-14 text-center">
+            <p className="text-[15px] font-medium text-ink">No rooms found</p>
+            <p className="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-ink-soft">
+              {chips.area
+                ? "No rooms sit inside the boundary you drew. Redraw it wider, or clear it from the map."
+                : "Nothing is listed that fits those constraints. Try widening the budget or clearing a filter."}
+            </p>
+          </div>
+        )}
+
         <div className="mt-3 grid gap-3">
           {listings.map((listing, index) => (
             // The card stays a server component; this only wires hovering it

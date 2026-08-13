@@ -12,7 +12,7 @@
  * ID when NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID is not configured.
  */
 type MapCtor = new (el: HTMLElement, opts: Record<string, unknown>) => GMap;
-type OverlayCtor = new (opts: Record<string, unknown>) => GOverlay;
+type PathOverlayCtor = new (opts: Record<string, unknown>) => GPathOverlay;
 
 export type GLatLng = { lat: () => number; lng: () => number };
 
@@ -23,8 +23,15 @@ export type GLatLngBounds = {
   west: number;
 };
 
+/** Handle returned by addListener. Draw mode has to unsubscribe when it ends. */
+export type GMapsListener = { remove: () => void };
+
 export type GMap = {
-  addListener: (event: string, handler: (e: { latLng: GLatLng }) => void) => void;
+  addListener: (
+    event: string,
+    handler: (e: { latLng: GLatLng }) => void,
+  ) => GMapsListener;
+  setOptions: (opts: Record<string, unknown>) => void;
   panTo: (pos: { lat: number; lng: number }) => void;
   setZoom: (zoom: number) => void;
   getZoom: () => number | undefined;
@@ -40,10 +47,10 @@ export type GMap = {
   ) => void;
 };
 
-export type GOverlay = {
+/** Polyline and Polygon share the parts this app uses. */
+export type GPathOverlay = {
   setMap: (map: GMap | null) => void;
-  setPosition: (pos: { lat: number; lng: number }) => void;
-  addListener: (event: string, handler: (e: { latLng: GLatLng }) => void) => void;
+  setPath: (path: { lat: number; lng: number }[]) => void;
 };
 
 /**
@@ -79,7 +86,8 @@ type PinElementCtor = new (opts: {
 
 export type MapsNamespace = {
   Map: MapCtor;
-  Circle: OverlayCtor;
+  Polygon: PathOverlayCtor;
+  Polyline: PathOverlayCtor;
   marker: {
     AdvancedMarkerElement: AdvancedMarkerCtor;
     PinElement: PinElementCtor;
@@ -161,7 +169,8 @@ export function toLatLngLiteral(
 
 export async function loadMapClasses(apiKey: string): Promise<{
   Map: MapCtor;
-  Circle: OverlayCtor;
+  Polygon: PathOverlayCtor;
+  Polyline: PathOverlayCtor;
   AdvancedMarkerElement: AdvancedMarkerCtor;
   PinElement: PinElementCtor;
 }> {
@@ -170,7 +179,8 @@ export async function loadMapClasses(apiKey: string): Promise<{
   if (!ns) throw new Error("Maps namespace did not initialise");
   return {
     Map: ns.Map,
-    Circle: ns.Circle,
+    Polygon: ns.Polygon,
+    Polyline: ns.Polyline,
     AdvancedMarkerElement: ns.marker.AdvancedMarkerElement,
     PinElement: ns.marker.PinElement,
   };

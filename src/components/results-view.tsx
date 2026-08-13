@@ -48,11 +48,9 @@ function useSelection(): SelectionApi {
  */
 export function ResultsView({
   pins,
-  signedIn,
   children,
 }: {
   pins: MapPin[];
-  signedIn: boolean;
   children: ReactNode;
 }) {
   const [selection, setSelection] = useState<Selection>(null);
@@ -77,9 +75,8 @@ export function ResultsView({
     [],
   );
 
-  // Nothing to plot: give the list the full width rather than an empty map.
-  if (pins.length === 0) return <>{children}</>;
-
+  // The map renders even with no rooms to plot: a search narrowed to nothing
+  // is exactly when the seeker needs the boundary tool to widen it again.
   return (
     <SelectionContext.Provider value={{ selection, select, clear }}>
       {/* Map first in the source and on the left at desktop widths, the way a
@@ -102,7 +99,7 @@ export function ResultsView({
               >
                 <path d="M8 0a5 5 0 0 0-5 5c0 3.5 5 11 5 11s5-7.5 5-11a5 5 0 0 0-5-5Zm0 7a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z" />
               </svg>
-              {mapOpen ? "Hide map" : `Show ${pins.length} on a map`}
+              {mapOpen ? "Hide map" : "Show map"}
             </button>
 
             <div
@@ -112,7 +109,6 @@ export function ResultsView({
                 pins={pins}
                 selectedId={selection?.id ?? null}
                 onSelect={onMapSelect}
-                signedIn={signedIn}
               />
             </div>
           </div>

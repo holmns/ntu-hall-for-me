@@ -1,20 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 export type MapType = "default" | "satellite";
-export type PoiLayer = "restaurants" | "transit" | "neighbourhoods" | "none";
 
-/** Layers backed by the paid Places proxy, which needs a signed-in user. */
-const NEEDS_ACCOUNT: PoiLayer[] = ["restaurants", "transit"];
-
-const POI_OPTIONS: { value: PoiLayer; label: string }[] = [
-  { value: "restaurants", label: "Restaurants" },
-  { value: "transit", label: "Transit" },
-  { value: "neighbourhoods", label: "Neighbourhoods" },
-  { value: "none", label: "None" },
-];
+const BUTTON =
+  "flex w-[62px] flex-col items-center gap-0.5 rounded-lg px-2 py-2 text-[10px] font-semibold shadow-[0_2px_10px_rgba(28,26,23,0.22)] transition-colors";
 
 /**
  * The map's own settings, overlaid on its top-left corner.
@@ -26,19 +17,9 @@ const POI_OPTIONS: { value: PoiLayer; label: string }[] = [
 export function MapOptions({
   mapType,
   onMapType,
-  poi,
-  onPoi,
-  signedIn,
-  poiStatus,
-  poiCount,
 }: {
   mapType: MapType;
   onMapType: (value: MapType) => void;
-  poi: PoiLayer;
-  onPoi: (value: PoiLayer) => void;
-  signedIn: boolean;
-  poiStatus: "idle" | "loading" | "failed";
-  poiCount: number;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -64,15 +45,13 @@ export function MapOptions({
   }, [open]);
 
   return (
-    <div ref={wrapRef} className="absolute left-3 top-3 z-20">
+    <div ref={wrapRef} className="relative">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className={`flex w-[62px] flex-col items-center gap-0.5 rounded-lg px-2 py-2 text-[10px] font-semibold shadow-[0_2px_10px_rgba(28,26,23,0.22)] transition-colors ${
-          open
-            ? "bg-brand text-white"
-            : "bg-surface text-ink-soft hover:text-ink"
+        className={`${BUTTON} ${
+          open ? "bg-brand text-white" : "bg-surface text-ink-soft hover:text-ink"
         }`}
       >
         <svg
@@ -92,67 +71,26 @@ export function MapOptions({
       </button>
 
       {open && (
-        <div className="mt-2 w-60 overflow-hidden rounded-xl border border-line bg-surface shadow-[0_8px_28px_rgba(28,26,23,0.18)]">
-          <div className="px-3.5 pb-3 pt-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
-              Map
-            </p>
-            <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg bg-surface-muted p-1">
-              {(["default", "satellite"] as MapType[]).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => onMapType(value)}
-                  aria-pressed={mapType === value}
-                  className={`rounded-md py-1.5 text-[12px] font-medium capitalize transition-colors ${
-                    mapType === value
-                      ? "bg-surface text-ink shadow-[0_1px_3px_rgba(28,26,23,0.12)]"
-                      : "text-ink-soft hover:text-ink"
-                  }`}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="border-t border-line px-3.5 pb-3 pt-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
-              Nearby points of interest
-            </p>
-            <div className="mt-1.5 space-y-0.5">
-              {POI_OPTIONS.map((option) => {
-                const locked = !signedIn && NEEDS_ACCOUNT.includes(option.value);
-                return (
-                  <label
-                    key={option.value}
-                    className={`flex items-center gap-2.5 rounded-md px-1.5 py-1.5 text-[13px] ${
-                      locked
-                        ? "cursor-not-allowed text-ink-faint"
-                        : "cursor-pointer text-ink-soft hover:bg-surface-muted hover:text-ink"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="poi-layer"
-                      value={option.value}
-                      checked={poi === option.value}
-                      disabled={locked}
-                      onChange={() => onPoi(option.value)}
-                      className="h-3.5 w-3.5 accent-brand"
-                    />
-                    {option.label}
-                  </label>
-                );
-              })}
-            </div>
-
-            <PoiNote
-              signedIn={signedIn}
-              poi={poi}
-              status={poiStatus}
-              count={poiCount}
-            />
+        <div className="absolute left-0 top-full mt-2 w-56 overflow-hidden rounded-xl border border-line bg-surface p-3.5 shadow-[0_8px_28px_rgba(28,26,23,0.18)]">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+            Map
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg bg-surface-muted p-1">
+            {(["default", "satellite"] as MapType[]).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onMapType(value)}
+                aria-pressed={mapType === value}
+                className={`rounded-md py-1.5 text-[12px] font-medium capitalize transition-colors ${
+                  mapType === value
+                    ? "bg-surface text-ink shadow-[0_1px_3px_rgba(28,26,23,0.12)]"
+                    : "text-ink-soft hover:text-ink"
+                }`}
+              >
+                {value}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -160,51 +98,92 @@ export function MapOptions({
   );
 }
 
-/** One line of feedback, so a layer that found nothing does not read as broken. */
-function PoiNote({
-  signedIn,
-  poi,
-  status,
-  count,
+/**
+ * Start, cancel or clear a hand-drawn search boundary.
+ *
+ * Redraw is its own button rather than "clear, then draw again": the boundary
+ * lives in the URL, so the two-step version would cost a second full search
+ * for a shape the seeker is about to replace anyway.
+ *
+ * Drawing is a mouse gesture and hides below `lg` - the phone map is 320px
+ * tall and the drag is driven by the Maps mouse events, which is not something
+ * to hand a touchscreen unverified. Clear stays visible at every width, so a
+ * shared link with a boundary in it is never a dead end on a phone.
+ */
+export function DrawBoundaryControl({
+  drawing,
+  hasArea,
+  onStart,
+  onCancel,
+  onClear,
 }: {
-  signedIn: boolean;
-  poi: PoiLayer;
-  status: "idle" | "loading" | "failed";
-  count: number;
+  drawing: boolean;
+  hasArea: boolean;
+  onStart: () => void;
+  onCancel: () => void;
+  onClear: () => void;
 }) {
-  if (!signedIn) {
+  if (drawing) {
     return (
-      <p className="mt-2 border-t border-line pt-2 text-[11px] leading-relaxed text-ink-faint">
-        <Link
-          href="/signin?callbackUrl=/search"
-          className="font-medium text-brand hover:underline"
-        >
-          Sign in
-        </Link>{" "}
-        for restaurants and transit. Neighbourhoods works either way.
-      </p>
+      <button
+        type="button"
+        onClick={onCancel}
+        className={`${BUTTON} hidden bg-brand text-white lg:flex`}
+      >
+        <PencilIcon />
+        Cancel
+      </button>
     );
   }
-  if (poi === "none") return null;
-  if (status === "loading") {
-    return (
-      <p className="mt-2 border-t border-line pt-2 text-[11px] text-ink-faint">
-        Looking around the map...
-      </p>
-    );
-  }
-  if (status === "failed") {
-    return (
-      <p className="mt-2 border-t border-line pt-2 text-[11px] leading-relaxed text-brand">
-        Could not load nearby places. Try again in a moment.
-      </p>
-    );
-  }
+
   return (
-    <p className="mt-2 border-t border-line pt-2 text-[11px] text-ink-faint">
-      {count === 0
-        ? "Nothing found in this area."
-        : `${count} shown for the current view.`}
-    </p>
+    <>
+      <button
+        type="button"
+        onClick={onStart}
+        className={`${BUTTON} hidden bg-surface text-ink-soft hover:text-ink lg:flex`}
+      >
+        <PencilIcon />
+        {hasArea ? "Redraw" : "Draw"}
+      </button>
+      {hasArea && (
+        <button
+          type="button"
+          onClick={onClear}
+          className={`${BUTTON} bg-surface text-brand hover:text-brand-hover`}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+          Clear
+        </button>
+      )}
+    </>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z" />
+      <path d="M13.5 6.5l4 4" />
+    </svg>
   );
 }

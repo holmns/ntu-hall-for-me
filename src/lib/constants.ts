@@ -12,31 +12,25 @@ export const NTU_CAMPUS = { lat: 1.3483, lng: 103.6831 } as const;
 export const SEARCH_BIAS_RADIUS_M = 8000;
 
 /**
- * The residential areas a seeker actually names when they talk about where to
- * live near NTU, for the browse map's Neighbourhoods layer.
+ * Outline of the NTU Yunnan Garden campus, drawn on every map so "on campus"
+ * is something you can see rather than a label you have to trust.
  *
- * A fixed list rather than an API call. Places nearby search has no
- * "neighbourhood" type to ask for, this app only ever covers west Singapore,
- * and estate centroids do not move - so a lookup would cost money to return
- * something less accurate. Add to it by hand when the coverage area grows.
+ * Hand-traced and approximate: it encloses the halls, the academic spines and
+ * NIE with a little margin, and it is for orientation only. It is **not** used
+ * to decide whether a listing is on campus - that is the provider's `category`
+ * choice, and moving these numbers must never start changing search results.
  */
-export const WEST_SG_NEIGHBOURHOODS: {
-  name: string;
-  lat: number;
-  lng: number;
-}[] = [
-  { name: "NTU campus", lat: 1.3483, lng: 103.6831 },
-  { name: "Pioneer", lat: 1.3376, lng: 103.6974 },
-  { name: "Boon Lay", lat: 1.3462, lng: 103.7118 },
-  { name: "Jurong West", lat: 1.3496, lng: 103.7075 },
-  { name: "Lakeside", lat: 1.3444, lng: 103.7212 },
-  { name: "Chinese Garden", lat: 1.3423, lng: 103.7325 },
-  { name: "Jurong East", lat: 1.3331, lng: 103.7422 },
-  { name: "Clementi", lat: 1.3151, lng: 103.7650 },
-  { name: "Bukit Batok", lat: 1.3490, lng: 103.7495 },
-  { name: "Choa Chu Kang", lat: 1.3854, lng: 103.7443 },
-  { name: "Tengah", lat: 1.3660, lng: 103.7160 },
-  { name: "Joo Koon", lat: 1.3277, lng: 103.6784 },
+export const NTU_CAMPUS_OUTLINE: { lat: number; lng: number }[] = [
+  { lat: 1.3560, lng: 103.6805 },
+  { lat: 1.3556, lng: 103.6862 },
+  { lat: 1.3528, lng: 103.6916 },
+  { lat: 1.3482, lng: 103.6935 },
+  { lat: 1.3441, lng: 103.6912 },
+  { lat: 1.3410, lng: 103.6862 },
+  { lat: 1.3404, lng: 103.6808 },
+  { lat: 1.3424, lng: 103.6762 },
+  { lat: 1.3478, lng: 103.6742 },
+  { lat: 1.3529, lng: 103.6762 },
 ];
 
 export const TAG_LABELS: Record<ListingTag, string> = {

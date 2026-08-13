@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -9,9 +10,21 @@ import {
   metersBetween,
   type GAdvancedMarker,
   type GMap,
+  type GMapsListener,
+  type GPathOverlay,
 } from "@/lib/maps-client";
-import { MapOptions, type MapType, type PoiLayer } from "./map-options";
-import { NTU_CAMPUS, WEST_SG_NEIGHBOURHOODS } from "@/lib/constants";
+import {
+  DrawBoundaryControl,
+  MapOptions,
+  type MapType,
+} from "./map-options";
+import { NTU_CAMPUS, NTU_CAMPUS_OUTLINE } from "@/lib/constants";
+import {
+  areaBounds,
+  decodeArea,
+  encodeArea,
+  type AreaPoint,
+} from "@/lib/area-filter";
 
 /**
  * Everything the map needs about one room. Built server-side so the client
@@ -30,24 +43,13 @@ export type MapPin = {
   imageAlt: string;
 };
 
-type Poi = { id: string; name: string; lat: number; lng: number };
+const BRAND = "#b3202f";
+const ACCENT = "#0f766e";
 
-/** Centre and half-diagonal of what the map is currently showing. */
-type Viewport = { lat: number; lng: number; radius: number };
-
-/** One resolved Places lookup, tagged with the layer+area it answers for. */
-type FetchedPois = { key: string; places: Poi[]; failed: boolean };
-
-/** Stable identity, so the marker effect does not rebuild on every render. */
-const EMPTY_POIS: Poi[] = [];
-
-/** Neighbourhood centroids inside the current view, or all of them at start. */
-function neighbourhoodsIn(view: Viewport | null): Poi[] {
-  const inView = view
-    ? WEST_SG_NEIGHBOURHOODS.filter((n) => metersBetween(view, n) <= view.radius)
-    : WEST_SG_NEIGHBOURHOODS;
-  return inView.map((n) => ({ id: n.name, ...n }));
-}
+/** Ignore mouse jitter under this while drawing, and thin the path with it. */
+const DRAW_MIN_SPACING_M = 25;
+/** Upper bound on a drawn shape, so the URL stays a sane length. */
+const DRAW_MAX_POINTS = 60;
 
 // Written as whole literals so Tailwind's scanner sees them: these are applied
 // to raw DOM inside a marker, not to JSX.
@@ -55,11 +57,6 @@ const PIN_BASE =
   "cursor-pointer select-none whitespace-nowrap rounded-full border px-2 py-[3px] text-[11px] font-semibold tabular-nums shadow-[0_1px_5px_rgba(28,26,23,0.2)] transition-transform duration-150 ease-out";
 const PIN_IDLE = "border-line-strong bg-surface text-ink hover:scale-110";
 const PIN_ACTIVE = "border-brand bg-brand text-white scale-110";
-
-const POI_DOT_COLOUR: Record<string, string> = {
-  restaurants: "#c2703b",
-  transit: "#2563eb",
-};
 
 function pinElement(price: number): HTMLElement {
   const el = document.createElement("div");
@@ -77,34 +74,13 @@ function ntuMarkerContent(): HTMLElement {
 }
 
 /**
- * Points of interest are reference, not results, so they read as quieter than
- * a price pin: a dot with a hover title for the two Places layers, and a plain
- * label for neighbourhoods, where the name is the entire point.
+ * Bounding box over every pin plus the whole campus outline - not just its
+ * centre, or the western half of the shape falls outside the frame, which
+ * looks like a rendering bug rather than a map edge.
  */
-function poiElement(name: string, layer: PoiLayer): HTMLElement {
-  if (layer === "neighbourhoods") {
-    const label = document.createElement("div");
-    label.className =
-      "select-none whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-ink-soft [text-shadow:0_1px_3px_rgba(255,255,255,0.95),0_0_6px_rgba(255,255,255,0.9)]";
-    label.textContent = name;
-    return label;
-  }
-
-  const dot = document.createElement("div");
-  dot.title = name;
-  dot.style.width = "10px";
-  dot.style.height = "10px";
-  dot.style.borderRadius = "50%";
-  dot.style.backgroundColor = POI_DOT_COLOUR[layer] ?? "#57534e";
-  dot.style.border = "2px solid #ffffff";
-  dot.style.boxShadow = "0 0 0 1px rgba(28, 26, 23, 0.2)";
-  return dot;
-}
-
-/** Bounding box over every pin plus campus, so NTU is always in frame. */
 function boundsOf(pins: MapPin[]) {
-  const lats = [NTU_CAMPUS.lat, ...pins.map((p) => p.lat)];
-  const lngs = [NTU_CAMPUS.lng, ...pins.map((p) => p.lng)];
+  const lats = [...NTU_CAMPUS_OUTLINE.map((p) => p.lat), ...pins.map((p) => p.lat)];
+  const lngs = [...NTU_CAMPUS_OUTLINE.map((p) => p.lng), ...pins.map((p) => p.lng)];
   return {
     north: Math.max(...lats),
     south: Math.min(...lats),
@@ -113,19 +89,21 @@ function boundsOf(pins: MapPin[]) {
   };
 }
 
-/**
- * Whether the map has moved enough to be worth another Places call. Panning
- * a block must not cost a request, so the threshold is a fraction of what is
- * already on screen rather than a fixed distance.
- */
-function worthRefetching(prev: Viewport | null, next: Viewport): boolean {
-  if (!prev) return true;
-  if (metersBetween(prev, next) > prev.radius * 0.4) return true;
-  return Math.abs(next.radius - prev.radius) > prev.radius * 0.35;
+/** Evenly drop points from a long drag so the encoded shape stays short. */
+function thin(points: AreaPoint[]): AreaPoint[] {
+  if (points.length <= DRAW_MAX_POINTS) return points;
+  const step = points.length / DRAW_MAX_POINTS;
+  const out: AreaPoint[] = [];
+  for (let i = 0; i < DRAW_MAX_POINTS; i++) {
+    out.push(points[Math.floor(i * step)]);
+  }
+  return out;
 }
 
 /**
- * The browse map: one price marker per room in the current result set.
+ * The browse map: one price marker per room in the current result set, the NTU
+ * campus outlined underneath, and a boundary the seeker can draw to narrow the
+ * search.
  *
  * Selection is owned by the parent (`ResultsView`) rather than by this
  * component, because the same selection drives the card list. Everything here
@@ -137,15 +115,16 @@ export function ResultsMap({
   pins,
   selectedId,
   onSelect,
-  signedIn,
 }: {
   pins: MapPin[];
   selectedId: string | null;
   /** `null` clears the selection, e.g. a click on empty map. */
   onSelect: (id: string | null) => void;
-  /** Gates the two points-of-interest layers that cost a Places call. */
-  signedIn: boolean;
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const areaParam = searchParams.get("area");
+
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<GMap | null>(null);
   // Created lazily inside an effect rather than during render: these entries
@@ -154,19 +133,13 @@ export function ResultsMap({
     string,
     { marker: GAdvancedMarker; el: HTMLElement }
   > | null>(null);
-  const poiMarkersRef = useRef<GAdvancedMarker[] | null>(null);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
   const [status, setStatus] = useState<"loading" | "ready" | "failed">(
     "loading",
   );
   const [mapType, setMapType] = useState<MapType>("default");
-  const [poi, setPoi] = useState<PoiLayer>("none");
-  const [view, setView] = useState<Viewport | null>(null);
-  // Only the two Places-backed layers need state; "none" and "neighbourhoods"
-  // are derived below, because storing a value you can compute is what makes
-  // an effect fight the render.
-  const [fetched, setFetched] = useState<FetchedPois | null>(null);
+  const [drawing, setDrawing] = useState(false);
 
   // Read inside effects that must not re-run when a callback identity moves.
   const onSelectRef = useRef(onSelect);
@@ -177,6 +150,11 @@ export function ResultsMap({
   useEffect(() => {
     pinsRef.current = pins;
   }, [pins]);
+  const area = decodeArea(areaParam);
+  const areaRef = useRef(area);
+  useEffect(() => {
+    areaRef.current = decodeArea(areaParam);
+  }, [areaParam]);
 
   /**
    * Frame the map on the rooms.
@@ -190,40 +168,45 @@ export function ResultsMap({
     const map = mapRef.current;
     const el = ref.current;
     const list = pinsRef.current;
-    if (!map || !el || list.length === 0) return;
+    const drawn = areaRef.current;
+    if (!map || !el) return;
     if (el.clientWidth < 80 || el.clientHeight < 80) return;
+
+    // With no rooms to frame, frame the boundary instead - "redraw it wider"
+    // is useless advice if what you drew is off-screen.
+    const target =
+      list.length > 0 ? boundsOf(list) : drawn ? areaBounds(drawn) : null;
+    if (!target) return;
 
     // A marker's label is anchored under its point and spreads sideways, so
     // the horizontal padding has to clear half a price pill or the easternmost
-    // room loses its price off the edge.
-    map.fitBounds(boundsOf(list), { top: 40, right: 64, bottom: 48, left: 64 });
+    // room loses its price off the edge. The left is wider still, to keep the
+    // campus and its pins out from under the Options and Draw buttons.
+    map.fitBounds(target, { top: 40, right: 64, bottom: 48, left: 104 });
     // A single room fits to a point, which Maps reads as maximum zoom.
     if (list.length === 1 && (map.getZoom() ?? 0) > 16) map.setZoom(16);
   }, []);
 
-  const readViewport = useCallback((map: GMap) => {
-    const bounds = map.getBounds();
-    if (!bounds) return;
-    const ne = bounds.getNorthEast();
-    const sw = bounds.getSouthWest();
-    const centre = {
-      lat: (ne.lat() + sw.lat()) / 2,
-      lng: (ne.lng() + sw.lng()) / 2,
-    };
-    const next: Viewport = {
-      ...centre,
-      radius: metersBetween(centre, { lat: ne.lat(), lng: ne.lng() }),
-    };
-    setView((prev) => (worthRefetching(prev, next) ? next : prev));
-  }, []);
+  // The boundary lives in the URL, so drawing one is a navigation like any
+  // other filter change: shareable, reloadable, and undone by the back button.
+  const applyArea = useCallback(
+    (points: AreaPoint[] | null) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (points) params.set("area", encodeArea(points));
+      else params.delete("area");
+      const query = params.toString();
+      router.push(query ? `/search?${query}` : "/search");
+    },
+    [router, searchParams],
+  );
 
-  // Build the map once. Markers are attached by the effects below.
+  // Build the map once. Markers and overlays are attached by the effects below.
   useEffect(() => {
     if (!ref.current) return;
     let cancelled = false;
 
     loadMapClasses(apiKey)
-      .then(({ Map, AdvancedMarkerElement }) => {
+      .then(({ Map, AdvancedMarkerElement, Polygon }) => {
         if (cancelled || !ref.current) return;
 
         const map = new Map(ref.current, {
@@ -241,6 +224,20 @@ export function ResultsMap({
         });
         mapRef.current = map;
 
+        // Campus, drawn under everything. Not clickable, so it never eats a
+        // click meant for a pin or for the boundary tool.
+        new Polygon({
+          map,
+          paths: NTU_CAMPUS_OUTLINE,
+          strokeColor: ACCENT,
+          strokeOpacity: 0.75,
+          strokeWeight: 1.5,
+          fillColor: ACCENT,
+          fillOpacity: 0.1,
+          clickable: false,
+          zIndex: 0,
+        });
+
         new AdvancedMarkerElement({
           map,
           position: NTU_CAMPUS,
@@ -255,7 +252,6 @@ export function ResultsMap({
         // Tapping the map itself is the way out of a selection on a phone,
         // where there is no hover to move away from.
         map.addListener("click", () => onSelectRef.current(null));
-        map.addListener("idle", () => readViewport(map));
 
         setStatus("ready");
       })
@@ -267,7 +263,7 @@ export function ResultsMap({
     return () => {
       cancelled = true;
     };
-  }, [apiKey, readViewport]);
+  }, [apiKey]);
 
   useEffect(() => {
     if (status !== "ready") return;
@@ -277,6 +273,121 @@ export function ResultsMap({
       mapType === "satellite" ? "hybrid" : "roadmap",
     );
   }, [mapType, status]);
+
+  // The boundary currently applied, redrawn whenever the URL changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (status !== "ready" || !map) return;
+    if (!area) return;
+
+    let cancelled = false;
+    let overlay: GPathOverlay | null = null;
+
+    loadMapClasses(apiKey).then(({ Polygon }) => {
+      if (cancelled) return;
+      overlay = new Polygon({
+        map,
+        paths: area,
+        strokeColor: BRAND,
+        strokeOpacity: 0.9,
+        strokeWeight: 2,
+        fillColor: BRAND,
+        fillOpacity: 0.07,
+        clickable: false,
+        zIndex: 1,
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      overlay?.setMap(null);
+    };
+    // `area` is derived from areaParam, which is the stable dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [areaParam, status, apiKey]);
+
+  // Draw mode. Freehand rather than click-per-vertex: "the area I want" is a
+  // gesture, not a list of corners. Panning is switched off for the duration
+  // so a drag draws instead of moving the map.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (status !== "ready" || !map || !drawing) return;
+
+    let cancelled = false;
+    let line: GPathOverlay | null = null;
+    let points: AreaPoint[] = [];
+    let tracking = false;
+    const subs: GMapsListener[] = [];
+
+    map.setOptions({
+      draggable: false,
+      gestureHandling: "none",
+      disableDoubleClickZoom: true,
+      draggableCursor: "crosshair",
+    });
+
+    loadMapClasses(apiKey).then(({ Polyline }) => {
+      if (cancelled) return;
+      line = new Polyline({
+        map,
+        path: [],
+        strokeColor: BRAND,
+        strokeOpacity: 0.95,
+        strokeWeight: 3,
+        clickable: false,
+        zIndex: 5,
+      });
+
+      subs.push(
+        map.addListener("mousedown", (e) => {
+          tracking = true;
+          points = [{ lat: e.latLng.lat(), lng: e.latLng.lng() }];
+          line?.setPath(points);
+        }),
+      );
+
+      subs.push(
+        map.addListener("mousemove", (e) => {
+          if (!tracking) return;
+          const next = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+          // Thinning as we go rather than afterwards: a slow drag emits a
+          // point per pixel, and the polyline redraws on each one.
+          if (metersBetween(points[points.length - 1], next) < DRAW_MIN_SPACING_M) {
+            return;
+          }
+          points.push(next);
+          line?.setPath(points);
+        }),
+      );
+
+      subs.push(
+        map.addListener("mouseup", () => {
+          if (!tracking) return;
+          tracking = false;
+          // A click rather than a drag. Treat it as a miss and let them retry
+          // instead of filtering the page down to nothing.
+          if (points.length < 3) {
+            line?.setPath([]);
+            return;
+          }
+          setDrawing(false);
+          applyArea(thin(points));
+        }),
+      );
+    });
+
+    return () => {
+      cancelled = true;
+      for (const sub of subs) sub.remove();
+      line?.setMap(null);
+      map.setOptions({
+        draggable: true,
+        gestureHandling: "greedy",
+        disableDoubleClickZoom: false,
+        draggableCursor: null,
+      });
+    };
+  }, [drawing, status, apiKey, applyArea]);
 
   // Rebuild the marker layer whenever the result set changes, and frame it.
   // Keyed on the id list rather than the array identity, which is new on every
@@ -310,9 +421,11 @@ export function ResultsMap({
 
       fitToPins();
     });
-    // `pins` is intentionally absent: pinKey is its stable identity.
+    // `pins` is intentionally absent: pinKey is its stable identity. areaParam
+    // is here for the one case pinKey misses - a boundary redrawn from no
+    // results to no results, where only the shape to frame has changed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, apiKey, pinKey, fitToPins]);
+  }, [status, apiKey, pinKey, areaParam, fitToPins]);
 
   // Re-frame when the map's box actually changes size - the first real layout
   // after mount, the mobile map toggle, a window resize. Panning does not
@@ -332,88 +445,6 @@ export function ResultsMap({
     observer.observe(el);
     return () => observer.disconnect();
   }, [status, fitToPins]);
-
-  // What the chosen layer resolves to for whatever the map is showing now.
-  // Neighbourhoods are local data, so they never touch the network.
-  const remoteKey =
-    (poi === "restaurants" || poi === "transit") && view && signedIn
-      ? `${poi}:${view.lat.toFixed(3)}:${view.lng.toFixed(3)}:${view.radius}`
-      : null;
-  const settled = remoteKey && fetched?.key === remoteKey ? fetched : null;
-
-  const pois: Poi[] =
-    poi === "neighbourhoods"
-      ? neighbourhoodsIn(view)
-      : (settled?.places ?? EMPTY_POIS);
-
-  const poiStatus: "idle" | "loading" | "failed" = !remoteKey
-    ? "idle"
-    : !settled
-      ? "loading"
-      : settled.failed
-        ? "failed"
-        : "idle";
-
-  // One Places call per layer per area, and only once the view has moved
-  // enough for the answer to differ (see worthRefetching).
-  useEffect(() => {
-    if (!remoteKey || !view) return;
-
-    let cancelled = false;
-    const url = `/api/places/nearby?layer=${poi}&lat=${view.lat}&lng=${view.lng}&radius=${view.radius}`;
-
-    fetch(url)
-      .then((res) => {
-        if (!res.ok) throw new Error(`nearby ${res.status}`);
-        return res.json() as Promise<{ places?: Poi[] }>;
-      })
-      .then((data) => {
-        if (!cancelled) {
-          setFetched({ key: remoteKey, places: data.places ?? [], failed: false });
-        }
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        console.error("[results-map] nearby places failed:", error);
-        setFetched({ key: remoteKey, places: [], failed: true });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-    // `view` and `poi` are both folded into remoteKey.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remoteKey]);
-
-  const poiKey = pois.map((p) => p.id).join(",");
-  useEffect(() => {
-    const map = mapRef.current;
-    if (status !== "ready" || !map) return;
-
-    const existing = (poiMarkersRef.current ??= []);
-    for (const marker of existing) marker.map = null;
-    existing.length = 0;
-
-    if (pois.length === 0) return;
-
-    loadMapClasses(apiKey).then(({ AdvancedMarkerElement }) => {
-      if (mapRef.current !== map) return;
-      for (const place of pois) {
-        existing.push(
-          new AdvancedMarkerElement({
-            map,
-            position: { lat: place.lat, lng: place.lng },
-            content: poiElement(place.name, poi),
-            title: place.name,
-            // Under the rooms. These are context, never the answer.
-            zIndex: 0,
-          }),
-        );
-      }
-    });
-    // `pois` is intentionally absent: poiKey is its stable identity.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, apiKey, poiKey, poi]);
 
   // Restyle on selection, and pan only when the marker is off-screen - panning
   // on every hover would make the map lurch under the reader.
@@ -474,15 +505,24 @@ export function ResultsMap({
       <div ref={ref} className="h-full w-full" />
 
       {status === "ready" && (
-        <MapOptions
-          mapType={mapType}
-          onMapType={setMapType}
-          poi={poi}
-          onPoi={setPoi}
-          signedIn={signedIn}
-          poiStatus={poiStatus}
-          poiCount={pois.length}
-        />
+        <div className="absolute left-3 top-3 z-20 flex flex-col gap-2">
+          <MapOptions mapType={mapType} onMapType={setMapType} />
+          <DrawBoundaryControl
+            drawing={drawing}
+            hasArea={area != null}
+            onStart={() => setDrawing(true)}
+            onCancel={() => setDrawing(false)}
+            onClear={() => applyArea(null)}
+          />
+        </div>
+      )}
+
+      {drawing && (
+        <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-20">
+          <p className="rounded-full bg-ink/85 px-3.5 py-1.5 text-[12px] font-medium text-white shadow-[0_2px_10px_rgba(28,26,23,0.25)]">
+            Drag on the map to draw the area you want
+          </p>
+        </div>
       )}
 
       {status === "loading" && (
@@ -491,7 +531,7 @@ export function ResultsMap({
         </div>
       )}
 
-      {selected && (
+      {selected && !drawing && (
         /* Clear of the bottom strip: Google's logo and attribution have to
            stay legible, and they sit in that last ~24px. */
         <div className="pointer-events-none absolute inset-x-2 bottom-7 z-10">

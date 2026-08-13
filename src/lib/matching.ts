@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "./prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { chatJson, chatStream, extractJson } from "./openrouter";
+import { areaBounds, isInsideArea, type AreaPoint } from "./area-filter";
 import { embedText, toVectorLiteral } from "./embeddings";
 import { ALL_TAGS, TAG_LABELS } from "./constants";
 import { LISTING_IMAGE_SELECT, type ListingImageView } from "./images";
@@ -37,6 +38,10 @@ export type ChipFilters = {
   maxPrice?: number | null;
   category?: ListingCategory | null;
   roomType?: RoomType | null;
+  /**
+   * A boundary the seeker drew on the map. Never relaxed - see `hardFilter`.
+   */
+  area?: AreaPoint[] | null;
 };
 
 export type ListingWithProvider = Listing & {
@@ -278,6 +283,15 @@ async function runFilter(
       Prisma.sql`"tags"::text[] @> ${intent.mustHaveTags}::text[]`,
     );
   }
+  // Bounding box only. It is what SQL can do cheaply and it is enough to keep
+  // the row count down; the exact point-in-polygon test runs below, once, on
+  // the rows that survive.
+  if (chips.area) {
+    const box = areaBounds(chips.area);
+    conditions.push(
+      Prisma.sql`"lat" BETWEEN ${box.south} AND ${box.north} AND "lng" BETWEEN ${box.west} AND ${box.east}`,
+    );
+  }
 
   // NULLS LAST is load-bearing: a listing whose embedding failed or has not
   // been backfilled yet still has to appear, just below everything that can be
@@ -305,9 +319,14 @@ async function runFilter(
 
   // `IN` does not preserve order, so restore the ranking from the first query.
   const byId = new Map(rows.map((row) => [row.id, row]));
-  const listings = ids
+  let listings = ids
     .map((id) => byId.get(id))
     .filter((row): row is ListingWithProvider => row != null);
+
+  if (chips.area) {
+    const area = chips.area;
+    listings = listings.filter((l) => isInsideArea(l, area));
+  }
 
   if (attempt.ignoreCommute || intent.maxCommuteMin == null) return listings;
 
@@ -335,6 +354,11 @@ export function commuteMinutes(
  * Applies the hard filter, progressively relaxing soft-ish constraints if it
  * returns nothing. An empty result page is the worst demo outcome, and an
  * over-eager LLM must-have tag is the most likely cause.
+ *
+ * What is relaxed is only ever a guess the model made. A drawn boundary and
+ * the filter chips are things the seeker did on purpose, so they survive every
+ * attempt: quietly showing rooms outside the shape someone just drew would
+ * make the drawing tool a lie.
  */
 export async function hardFilter(
   intent: SeekerIntent,
