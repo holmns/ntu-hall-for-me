@@ -19,6 +19,13 @@ import {
 } from "./map-options";
 import { NTU_CAMPUS, NTU_CAMPUS_OUTLINE } from "@/lib/constants";
 import { areaBounds, type AreaPoint } from "@/lib/area-filter";
+import {
+  ALL_LAYERS_VISIBLE,
+  hiddenLayerStyles,
+  layerStyleId,
+  type MapLayer,
+  type MapLayerState,
+} from "@/lib/map-styles";
 
 /**
  * Everything the map needs about one room. Built server-side so the client
@@ -138,7 +145,10 @@ export function ResultsMap({
     "loading",
   );
   const [mapType, setMapType] = useState<MapType>("default");
+  const [layers, setLayers] = useState<MapLayerState>(ALL_LAYERS_VISIBLE);
   const [drawing, setDrawing] = useState(false);
+  // Styled map types already registered on the current map, by combination id.
+  const styledTypesRef = useRef<Set<string>>(new Set());
 
   // Read inside effects that must not re-run when a callback identity moves.
   const onSelectRef = useRef(onSelect);
@@ -257,14 +267,67 @@ export function ResultsMap({
     };
   }, [apiKey]);
 
+  /**
+   * The base map: imagery, or the road map carrying whatever optional layers
+   * are switched on.
+   *
+   * The style array cannot go on the Map itself. `styles` is ignored outright
+   * whenever a `mapId` is present ("map styles are controlled via the cloud
+   * console"), and the mapId is exactly what makes advanced markers render, so
+   * dropping it to gain styling would cost every price pin on the page. A
+   * StyledMapType is the way round that: it registers as its own map type and
+   * is swapped in by id, which the API does honour on a mapId map.
+   *
+   * It logs "A Map's custom map types cannot be set when a mapId is present"
+   * while doing it. That warning is wrong - the styled raster tiles are
+   * fetched and drawn, verified against every feature type below. Do not
+   * "fix" a working toggle because the console complains.
+   *
+   * Nothing hidden means plain "roadmap" rather than an empty StyledMapType,
+   * so a reader who never opens this menu keeps today's vector road map.
+   */
   useEffect(() => {
-    if (status !== "ready") return;
+    const map = mapRef.current;
+    if (status !== "ready" || !map) return;
+
     // "hybrid" rather than "satellite": imagery with no street names is
-    // useless for judging where a room is.
-    mapRef.current?.setMapTypeId(
-      mapType === "satellite" ? "hybrid" : "roadmap",
-    );
-  }, [mapType, status]);
+    // useless for judging where a room is. Styles do not reach it either way,
+    // which is why the layer rows disable themselves here.
+    if (mapType === "satellite") {
+      map.setMapTypeId("hybrid");
+      return;
+    }
+
+    const styleId = layerStyleId(layers);
+    if (!styleId) {
+      map.setMapTypeId("roadmap");
+      return;
+    }
+
+    let cancelled = false;
+    loadMapClasses(apiKey).then(({ StyledMapType }) => {
+      if (cancelled || mapRef.current !== map) return;
+      // Registered once per combination and kept for the life of the map:
+      // these get flipped back and forth, and re-registering would throw the
+      // tile cache away on every toggle.
+      if (!styledTypesRef.current.has(styleId)) {
+        map.mapTypes.set(
+          styleId,
+          new StyledMapType(hiddenLayerStyles(layers), { name: "Map" }),
+        );
+        styledTypesRef.current.add(styleId);
+      }
+      map.setMapTypeId(styleId);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mapType, layers, status, apiKey]);
+
+  const onLayer = useCallback((id: MapLayer, visible: boolean) => {
+    setLayers((current) => ({ ...current, [id]: visible }));
+  }, []);
 
   // The boundary currently applied, redrawn whenever the URL changes.
   useEffect(() => {
@@ -498,7 +561,12 @@ export function ResultsMap({
 
       {status === "ready" && (
         <div className="absolute left-3 top-3 z-20 flex flex-col gap-2">
-          <MapOptions mapType={mapType} onMapType={setMapType} />
+          <MapOptions
+            mapType={mapType}
+            onMapType={setMapType}
+            layers={layers}
+            onLayer={onLayer}
+          />
           <DrawBoundaryControl
             drawing={drawing}
             hasArea={area != null}

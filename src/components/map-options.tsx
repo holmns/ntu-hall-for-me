@@ -2,6 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import {
+  MAP_LAYERS,
+  type MapLayer,
+  type MapLayerState,
+} from "@/lib/map-styles";
+
 export type MapType = "default" | "satellite";
 
 const BUTTON =
@@ -17,12 +23,20 @@ const BUTTON =
 export function MapOptions({
   mapType,
   onMapType,
+  layers,
+  onLayer,
 }: {
   mapType: MapType;
   onMapType: (value: MapType) => void;
+  layers: MapLayerState;
+  onLayer: (id: MapLayer, visible: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  // Styles apply to the road map only. Imagery carries its own baked-in
+  // labels, so these rows are disabled rather than left looking live and
+  // doing nothing.
+  const onImagery = mapType === "satellite";
 
   useEffect(() => {
     if (!open) return;
@@ -92,6 +106,59 @@ export function MapOptions({
               </button>
             ))}
           </div>
+
+          <p className="mt-3.5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+            Show on map
+          </p>
+          <div className="mt-1 flex flex-col">
+            {MAP_LAYERS.map(({ id, label }) => {
+              const visible = layers[id];
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  disabled={onImagery}
+                  aria-pressed={visible}
+                  onClick={() => onLayer(id, !visible)}
+                  className={`-mx-1 flex items-center gap-2.5 rounded-md px-1 py-1.5 text-left text-[12px] transition-colors ${
+                    onImagery
+                      ? "cursor-not-allowed opacity-40"
+                      : "hover:bg-surface-muted"
+                  }`}
+                >
+                  <span
+                    className={`grid h-4 w-4 shrink-0 place-items-center rounded border transition-colors ${
+                      visible
+                        ? "border-brand bg-brand text-white"
+                        : "border-line-strong bg-surface"
+                    }`}
+                  >
+                    {visible && (
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="h-2.5 w-2.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="m5 13 4 4L19 7" />
+                      </svg>
+                    )}
+                  </span>
+                  <span className="text-ink">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+          {onImagery && (
+            <p className="mt-1 text-[11px] leading-snug text-ink-faint">
+              Satellite labels come with the imagery, so these apply to the
+              default map.
+            </p>
+          )}
         </div>
       )}
     </div>

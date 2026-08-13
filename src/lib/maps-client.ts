@@ -26,6 +26,12 @@ export type GLatLngBounds = {
 /** Handle returned by addListener. Draw mode has to unsubscribe when it ends. */
 export type GMapsListener = { remove: () => void };
 
+/**
+ * Opaque handle to a registered map type. The app only ever hands one straight
+ * back to the map it came from, so there is nothing to model on it.
+ */
+export type GStyledMapType = { readonly __brand: "StyledMapType" };
+
 export type GMap = {
   addListener: (
     event: string,
@@ -35,8 +41,15 @@ export type GMap = {
   panTo: (pos: { lat: number; lng: number }) => void;
   setZoom: (zoom: number) => void;
   getZoom: () => number | undefined;
-  /** "roadmap" | "satellite" | "hybrid" | "terrain". */
+  /** "roadmap" | "satellite" | "hybrid" | "terrain", or a registered id. */
   setMapTypeId: (id: string) => void;
+  /**
+   * Custom map types, keyed by the id `setMapTypeId` will be given. This is
+   * the only way to restyle a map that has a `mapId`: the `styles` option is
+   * ignored outright while one is present, and the mapId is what makes
+   * advanced markers render at all.
+   */
+  mapTypes: { set: (id: string, type: GStyledMapType) => void };
   /** Undefined until the map has laid out at least once. */
   getBounds: () =>
     | { getNorthEast: () => GLatLng; getSouthWest: () => GLatLng }
@@ -84,10 +97,16 @@ type PinElementCtor = new (opts: {
   scale?: number;
 }) => { element: HTMLElement };
 
+type StyledMapTypeCtor = new (
+  styles: Record<string, unknown>[],
+  opts?: { name?: string },
+) => GStyledMapType;
+
 export type MapsNamespace = {
   Map: MapCtor;
   Polygon: PathOverlayCtor;
   Polyline: PathOverlayCtor;
+  StyledMapType: StyledMapTypeCtor;
   marker: {
     AdvancedMarkerElement: AdvancedMarkerCtor;
     PinElement: PinElementCtor;
@@ -99,7 +118,9 @@ export const DEFAULT_MAP_ID =
 
 function getMapsNamespace(): MapsNamespace | null {
   const ns = (globalThis as { google?: { maps?: MapsNamespace } }).google?.maps;
-  return ns?.Map && ns.marker?.AdvancedMarkerElement ? ns : null;
+  return ns?.Map && ns.StyledMapType && ns.marker?.AdvancedMarkerElement
+    ? ns
+    : null;
 }
 
 const CALLBACK_NAME = "__ntuRoomFinderMapsReady";
@@ -171,6 +192,7 @@ export async function loadMapClasses(apiKey: string): Promise<{
   Map: MapCtor;
   Polygon: PathOverlayCtor;
   Polyline: PathOverlayCtor;
+  StyledMapType: StyledMapTypeCtor;
   AdvancedMarkerElement: AdvancedMarkerCtor;
   PinElement: PinElementCtor;
 }> {
@@ -181,6 +203,7 @@ export async function loadMapClasses(apiKey: string): Promise<{
     Map: ns.Map,
     Polygon: ns.Polygon,
     Polyline: ns.Polyline,
+    StyledMapType: ns.StyledMapType,
     AdvancedMarkerElement: ns.marker.AdvancedMarkerElement,
     PinElement: ns.marker.PinElement,
   };
