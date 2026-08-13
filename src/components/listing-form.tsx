@@ -127,6 +127,31 @@ export function ListingForm({
               ))}
             </select>
           </Field>
+
+          <Field label="Monthly rent (SGD)" error={state.fieldErrors?.price}>
+            <input
+              name="price"
+              type="number"
+              required
+              min={0}
+              max={3000}
+              step={10}
+              defaultValue={values.price}
+              placeholder="700"
+              // A number input rejects a pasted "$1,200" outright: the field
+              // stays empty and nothing says why. Typing those characters is
+              // already impossible, so paste is the only way they arrive -
+              // keep the number and drop the formatting.
+              onPaste={(event) => {
+                const pasted = event.clipboardData.getData("text");
+                const cleaned = pasted.replace(/[^\d.]/g, "");
+                if (cleaned === pasted) return;
+                event.preventDefault();
+                event.currentTarget.value = cleaned;
+              }}
+              className="field"
+            />
+          </Field>
         </div>
 
         {onCampus && (
@@ -134,24 +159,6 @@ export function ListingForm({
             {ON_CAMPUS_DISCLAIMER} It will be labelled this way on your listing.
           </p>
         )}
-
-        <Field
-          label="Monthly rent (SGD)"
-          error={state.fieldErrors?.price}
-          hint="Just the number, no dollar sign."
-        >
-          <input
-            name="price"
-            type="number"
-            required
-            min={0}
-            max={3000}
-            step={10}
-            defaultValue={values.price}
-            placeholder="700"
-            className="field sm:max-w-[200px]"
-          />
-        </Field>
       </Section>
 
       <Section

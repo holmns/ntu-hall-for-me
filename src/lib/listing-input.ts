@@ -15,11 +15,18 @@ export const listingSchema = z.object({
     .trim()
     .min(30, "Write at least a couple of sentences so matching has something to work with")
     .max(4000),
-  price: z.coerce
-    .number()
-    .int()
-    .min(PRICE_MIN, "Price cannot be negative")
-    .max(PRICE_MAX, `Price looks too high (max $${PRICE_MAX})`),
+  // The currency formatting is stripped rather than rejected: "$1,200" is a
+  // perfectly clear rent, and the form strips it on paste too - this is what
+  // covers autofill and anything posted directly.
+  price: z.preprocess(
+    (value) =>
+      typeof value === "string" ? value.replace(/[$,\s]/g, "") : value,
+    z.coerce
+      .number()
+      .int()
+      .min(PRICE_MIN, "Price cannot be negative")
+      .max(PRICE_MAX, `Price looks too high (max $${PRICE_MAX})`),
+  ),
   roomType: z.enum(["SINGLE", "SHARED", "WHOLE_UNIT"]),
   tags: z.array(z.enum(ALL_TAGS as [string, ...string[]])).default([]),
   placeId: z.string().trim().optional(),
