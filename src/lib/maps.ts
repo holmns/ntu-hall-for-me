@@ -127,6 +127,72 @@ export async function autocompletePlaces(
     }));
 }
 
+// ---------------------------------------------------------------------------
+// Nearby search (the browse map's points-of-interest layers)
+// ---------------------------------------------------------------------------
+
+export type NearbyPlace = {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+};
+
+/** Widest circle a POI layer may ask for. Keeps one toggle to one cheap call. */
+export const MAX_NEARBY_RADIUS_M = 3000;
+
+/**
+ * Places nearby search, used by the map's Restaurants and Transit layers.
+ *
+ * Bounded on purpose: one call per layer per area, capped result count, capped
+ * radius. This is a browsing nicety on a paid API, so it must never turn into
+ * a request per pan.
+ */
+export async function searchNearbyPlaces(
+  center: LatLng,
+  radiusM: number,
+  includedTypes: string[],
+  maxResultCount = 20,
+): Promise<NearbyPlace[]> {
+  const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": mapsKey(),
+      "X-Goog-FieldMask": "places.id,places.displayName,places.location",
+    },
+    body: JSON.stringify({
+      includedTypes,
+      maxResultCount,
+      rankPreference: "POPULARITY",
+      locationRestriction: {
+        circle: {
+          center: { latitude: center.lat, longitude: center.lng },
+          radius: Math.min(Math.max(radiusM, 200), MAX_NEARBY_RADIUS_M),
+        },
+      },
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Places nearby search failed: ${res.status}`);
+  const data = (await res.json()) as {
+    places?: {
+      id?: string;
+      displayName?: { text?: string };
+      location?: { latitude: number; longitude: number };
+    }[];
+  };
+
+  return (data.places ?? [])
+    .filter((p) => p.id && p.location)
+    .map((p) => ({
+      id: p.id!,
+      name: p.displayName?.text ?? "",
+      lat: p.location!.latitude,
+      lng: p.location!.longitude,
+    }));
+}
+
 /** Null only when Places has no location for the id. Throws on API failure. */
 export async function getPlaceDetail(
   placeId: string,

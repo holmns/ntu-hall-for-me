@@ -127,6 +127,19 @@
   }
 }
 
+/*
+ * The browse page locks itself to the viewport (map beside a list that scrolls
+ * on its own), so the site footer below it would add a second scrollbar for
+ * one line of text and push the map out of frame. That page repeats the
+ * disclaimer at the end of its own list instead. Desktop only - on a phone the
+ * page is an ordinary scrolling document and keeps the real footer.
+ */
+@media (min-width: 1024px) {
+  body:has([data-app-shell]) > footer {
+    display: none;
+  }
+}
+
 /* Hide the number input spinners on the price fields. */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {

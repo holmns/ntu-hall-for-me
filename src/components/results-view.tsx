@@ -48,9 +48,11 @@ function useSelection(): SelectionApi {
  */
 export function ResultsView({
   pins,
+  signedIn,
   children,
 }: {
   pins: MapPin[];
+  signedIn: boolean;
   children: ReactNode;
 }) {
   const [selection, setSelection] = useState<Selection>(null);
@@ -80,13 +82,12 @@ export function ResultsView({
 
   return (
     <SelectionContext.Provider value={{ selection, select, clear }}>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-6">
-        <div className="order-2 min-w-0 lg:order-1">{children}</div>
-
-        {/* First on a phone so the map and its collapse toggle are the first
-            thing in reach, second on desktop where it becomes the side panel. */}
-        <div className="order-1 lg:order-2">
-          <div className="lg:sticky lg:top-[4.5rem]">
+      {/* Map first in the source and on the left at desktop widths, the way a
+          rental search reads: the map is the browsing surface and the list is
+          the detail beside it. On a phone the two stack, map on top. */}
+      <div className="grid gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_minmax(380px,480px)] lg:gap-5">
+        <div className="min-w-0 lg:h-full">
+          <div className="lg:h-full">
             <button
               type="button"
               onClick={() => setMapOpen((open) => !open)}
@@ -104,19 +105,27 @@ export function ResultsView({
               {mapOpen ? "Hide map" : `Show ${pins.length} on a map`}
             </button>
 
-            {/* Capped rather than full-height: fitBounds frames the pins by
-                whichever axis is tighter, so a very tall column zooms out far
-                enough to fit the width and fills the rest with sea. */}
             <div
-              className={`${mapOpen ? "block" : "hidden"} h-[300px] sm:h-[380px] lg:block lg:h-[min(calc(100vh-8rem),560px)]`}
+              className={`${mapOpen ? "block" : "hidden"} h-[320px] sm:h-[420px] lg:block lg:h-full`}
             >
               <ResultsMap
                 pins={pins}
                 selectedId={selection?.id ?? null}
                 onSelect={onMapSelect}
+                signedIn={signedIn}
               />
             </div>
           </div>
+        </div>
+
+        {/* The only thing that scrolls on desktop. `pr-1` keeps the scrollbar
+            off the cards' right edge. */}
+        <div className="min-w-0 lg:h-full lg:overflow-y-auto lg:pr-1">
+          {children}
+          <p className="mt-6 hidden border-t border-line pt-4 text-xs leading-relaxed text-ink-faint lg:block">
+            NTU Room Finder is a student project. Listings are posted by users
+            and are not verified, endorsed by, or affiliated with NTU.
+          </p>
         </div>
       </div>
     </SelectionContext.Provider>

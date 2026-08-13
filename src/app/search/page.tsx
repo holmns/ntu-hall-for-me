@@ -73,7 +73,15 @@ export default async function SearchPage(props: PageProps<"/search">) {
   const chips = parseChips(sp);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+    // Wider than the rest of the app, and on desktop exactly one viewport tall:
+    // the map fills its column and the results scroll inside theirs, so the map
+    // never slides out of frame while you read. `data-app-shell` is what hides
+    // the site footer for that (see globals.css); the list repeats it at the
+    // end instead. Below lg this is an ordinary scrolling page.
+    <div
+      data-app-shell
+      className="mx-auto flex w-full max-w-[1600px] flex-col px-4 py-4 sm:px-6 lg:h-[calc(100vh-3.5rem)]"
+    >
       <SearchBar
         initial={{
           q: query,
@@ -84,12 +92,14 @@ export default async function SearchPage(props: PageProps<"/search">) {
         }}
       />
 
-      <Suspense
-        key={`${query}|${JSON.stringify(chips)}`}
-        fallback={<ResultsSkeleton query={query} />}
-      >
-        <Results query={query} chips={chips} backTo={currentUrl(sp)} />
-      </Suspense>
+      <div className="mt-4 min-h-0 flex-1">
+        <Suspense
+          key={`${query}|${JSON.stringify(chips)}`}
+          fallback={<ResultsSkeleton query={query} />}
+        >
+          <Results query={query} chips={chips} backTo={currentUrl(sp)} />
+        </Suspense>
+      </div>
     </div>
   );
 }
@@ -127,12 +137,15 @@ async function Results({
     },
   );
 
-  return (
-    <div className="mt-6">
+  // Everything that describes the result set lives in the right-hand column
+  // beside the map, not above both, so the map starts at the top of the page
+  // and keeps its full height.
+  const summary = (
+    <>
       {query.trim() && <IntentPanel intent={intent} count={listings.length} />}
 
       {relaxations.length > 0 && (
-        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
           <span className="font-medium">Nothing matched exactly.</span>{" "}
           {relaxations.join(" ")}
         </div>
@@ -144,14 +157,17 @@ async function Results({
         </Suspense>
       )}
 
-      <div className="mt-4 flex items-baseline justify-between gap-4">
-        <h2 className="text-sm font-medium text-ink-soft">
-          {listings.length} {listings.length === 1 ? "room" : "rooms"}
-          {query.trim() ? " for you" : ""}
-        </h2>
-      </div>
+      <h2 className="mt-3 text-sm font-medium text-ink-soft">
+        {listings.length} {listings.length === 1 ? "room" : "rooms"}
+        {query.trim() ? " for you" : ""}
+      </h2>
+    </>
+  );
 
-      {listings.length === 0 ? (
+  if (listings.length === 0) {
+    return (
+      <div>
+        {summary}
         <div className="card mt-3 px-6 py-14 text-center">
           <p className="text-[15px] font-medium text-ink">No rooms found</p>
           <p className="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-ink-soft">
@@ -159,40 +175,51 @@ async function Results({
             budget or clearing a filter.
           </p>
         </div>
-      ) : (
-        <ResultsView pins={listings.map((l) => toMapPin(l, mode))}>
-          <div className="mt-3 grid gap-3">
-            {listings.map((listing, index) => (
-              // The card stays a server component; this only wires hovering it
-              // to its pin on the map.
-              <SelectableCard key={listing.id} id={listing.id}>
-                <ListingCard
-                  listing={listing}
-                  // Only the listings that got sent for a reason reserve space
-                  // for one. The rest render exactly as they do when browsing.
-                  reason={
-                    query.trim() && index < REASON_LIMIT ? (
-                      <Suspense fallback={<ReasonSkeleton />}>
-                        <Reason state={reasonState} listingId={listing.id} />
-                      </Suspense>
-                    ) : undefined
-                  }
-                  rank={query.trim() ? index + 1 : undefined}
-                  mode={mode}
-                  save={
-                    <SaveButton
-                      listingId={listing.id}
-                      saved={savedIds.has(listing.id)}
-                      signedIn={user != null}
-                      callbackUrl={backTo}
-                    />
-                  }
-                />
-              </SelectableCard>
-            ))}
-          </div>
-        </ResultsView>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    // `lg:h-full` unbroken from the viewport-locked shell down to the map: one
+    // auto-height wrapper anywhere in this chain and the map stretches to the
+    // full height of the card list instead.
+    <div className="lg:h-full">
+      <ResultsView
+        pins={listings.map((l) => toMapPin(l, mode))}
+        signedIn={user != null}
+      >
+        {summary}
+        <div className="mt-3 grid gap-3">
+          {listings.map((listing, index) => (
+            // The card stays a server component; this only wires hovering it
+            // to its pin on the map.
+            <SelectableCard key={listing.id} id={listing.id}>
+              <ListingCard
+                listing={listing}
+                // Only the listings that got sent for a reason reserve space
+                // for one. The rest render exactly as they do when browsing.
+                reason={
+                  query.trim() && index < REASON_LIMIT ? (
+                    <Suspense fallback={<ReasonSkeleton />}>
+                      <Reason state={reasonState} listingId={listing.id} />
+                    </Suspense>
+                  ) : undefined
+                }
+                rank={query.trim() ? index + 1 : undefined}
+                mode={mode}
+                save={
+                  <SaveButton
+                    listingId={listing.id}
+                    saved={savedIds.has(listing.id)}
+                    signedIn={user != null}
+                    callbackUrl={backTo}
+                  />
+                }
+              />
+            </SelectableCard>
+          ))}
+        </div>
+      </ResultsView>
     </div>
   );
 }

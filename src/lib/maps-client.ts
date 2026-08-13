@@ -28,6 +28,8 @@ export type GMap = {
   panTo: (pos: { lat: number; lng: number }) => void;
   setZoom: (zoom: number) => void;
   getZoom: () => number | undefined;
+  /** "roadmap" | "satellite" | "hybrid" | "terrain". */
+  setMapTypeId: (id: string) => void;
   /** Undefined until the map has laid out at least once. */
   getBounds: () =>
     | { getNorthEast: () => GLatLng; getSouthWest: () => GLatLng }
@@ -122,6 +124,27 @@ function loadMapsApi(apiKey: string): Promise<void> {
     document.head.appendChild(script);
   });
   return mapsLoader;
+}
+
+/**
+ * Great-circle distance, duplicated from `maps.ts` rather than imported:
+ * that module reads the server-only Maps key and must never reach a client
+ * bundle.
+ */
+export function metersBetween(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const R = 6_371_000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.sin(dLng / 2) ** 2 *
+      Math.cos(toRad(a.lat)) *
+      Math.cos(toRad(b.lat));
+  return Math.round(2 * R * Math.asin(Math.sqrt(h)));
 }
 
 /** AdvancedMarkerElement#position is a LatLng after a drag, a plain literal otherwise. */

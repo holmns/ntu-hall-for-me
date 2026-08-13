@@ -11,6 +11,34 @@ export const NTU_CAMPUS = { lat: 1.3483, lng: 103.6831 } as const;
 /** Bias Places Autocomplete toward NTU / west Singapore. */
 export const SEARCH_BIAS_RADIUS_M = 8000;
 
+/**
+ * The residential areas a seeker actually names when they talk about where to
+ * live near NTU, for the browse map's Neighbourhoods layer.
+ *
+ * A fixed list rather than an API call. Places nearby search has no
+ * "neighbourhood" type to ask for, this app only ever covers west Singapore,
+ * and estate centroids do not move - so a lookup would cost money to return
+ * something less accurate. Add to it by hand when the coverage area grows.
+ */
+export const WEST_SG_NEIGHBOURHOODS: {
+  name: string;
+  lat: number;
+  lng: number;
+}[] = [
+  { name: "NTU campus", lat: 1.3483, lng: 103.6831 },
+  { name: "Pioneer", lat: 1.3376, lng: 103.6974 },
+  { name: "Boon Lay", lat: 1.3462, lng: 103.7118 },
+  { name: "Jurong West", lat: 1.3496, lng: 103.7075 },
+  { name: "Lakeside", lat: 1.3444, lng: 103.7212 },
+  { name: "Chinese Garden", lat: 1.3423, lng: 103.7325 },
+  { name: "Jurong East", lat: 1.3331, lng: 103.7422 },
+  { name: "Clementi", lat: 1.3151, lng: 103.7650 },
+  { name: "Bukit Batok", lat: 1.3490, lng: 103.7495 },
+  { name: "Choa Chu Kang", lat: 1.3854, lng: 103.7443 },
+  { name: "Tengah", lat: 1.3660, lng: 103.7160 },
+  { name: "Joo Koon", lat: 1.3277, lng: 103.6784 },
+];
+
 export const TAG_LABELS: Record<ListingTag, string> = {
   AIRCON: "Aircon",
   ENSUITE: "Ensuite bathroom",
