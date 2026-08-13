@@ -149,6 +149,94 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Landing page -> browse page: the search box travels
+
+   Searching from the landing page is not a page swap, it is the same box moving
+   to the top of a wider page and the rooms arriving under it. The three
+   `search-morph` participants are named in src/components/search-bar.tsx.
+
+   The search itself is not waiting on any of this: the navigation is what sends
+   the request, so the pipeline is already running on the server while the box
+   is still in flight.
+--------------------------------------------------------------------------- */
+::view-transition-group(.search-morph) {
+  animation-duration: 460ms;
+  /* Fast out of the gate, long settle. The same curve iOS uses for a sheet -
+     a linear move over this distance reads as a slide rather than as the box
+     having weight. */
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  /* The box grows to full width; its old, narrower snapshot must not spill out
+     of it on the way. */
+  overflow: hidden;
+}
+
+/* Every snapshot here has to be told to fill its group. The default sizing is
+   `inline-size: 100%; block-size: auto`, which keeps the captured aspect ratio
+   - so a 60px-tall bar snapshot doubles in height as the box doubles in width,
+   and what is left after the clip is the top half of a giant search box. */
+
+/* The box itself is a rounded rectangle and nothing else: every child with
+   content in it is captured separately below, so stretching this one costs
+   nothing but a slightly softer corner radius mid-flight. */
+::view-transition-old(search-box),
+::view-transition-new(search-box) {
+  height: 100%;
+  object-fit: fill;
+}
+
+/* Painted at natural size against the edge it is anchored to in the flex row,
+   rather than stretched across a box that is changing width. The query text
+   stays crisp and stays put while the box opens up to the right of it; the
+   buttons keep their real size and travel with the right edge. */
+::view-transition-old(search-box-field),
+::view-transition-new(search-box-field) {
+  height: 100%;
+  object-fit: none;
+  object-position: left center;
+}
+
+::view-transition-old(search-box-actions),
+::view-transition-new(search-box-actions) {
+  height: 100%;
+  object-fit: none;
+  object-position: right center;
+}
+
+/* Both sides hold the same words, so the crossfade only has to cover the
+   button's "Searching" -> "Search" and is over well before the box lands. */
+::view-transition-old(.search-morph),
+::view-transition-new(.search-morph) {
+  animation-duration: 180ms;
+}
+
+/*
+ * Nothing else on either page animates, and that is React's doing rather than
+ * an omission here: for the length of a transition it sets `view-transition-name:
+ * none` on the root element, so the unnamed remainder of the page is never
+ * captured and `::view-transition-old(root)` has no picture to fade. Styling
+ * that pseudo-element does nothing at all - it was tried. Crossfading the two
+ * pages means wrapping each page's root in its own `<ViewTransition>`, which
+ * would also freeze the browse page's streaming results behind a static
+ * snapshot for the length of the flight. The box is the thing that carries
+ * over; the rest is a cut, on purpose.
+ */
+
+/* The transition overlay sits over the live page and swallows clicks. Let them
+   through, or the box is dead for the length of the animation. */
+::view-transition {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 1ms !important;
+    animation-delay: 0s !important;
+  }
+}
+
 /* Hide the number input spinners on the price fields. */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {

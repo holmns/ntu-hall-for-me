@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, ViewTransition } from "react";
 
 import { CATEGORY_LABELS, ROOM_TYPE_LABELS } from "@/lib/constants";
 import type { ListingCategory, RoomType } from "@/generated/prisma/enums";
@@ -70,50 +70,92 @@ export function SearchBar({
 
   return (
     <div className="w-full">
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-        className="card flex items-center gap-2 p-2 shadow-[0_1px_3px_rgba(28,26,23,0.05)] focus-within:border-brand focus-within:shadow-[0_0_0_3px_var(--color-brand-soft)]"
-      >
-        <svg
-          viewBox="0 0 20 20"
-          className="ml-2 h-4.5 w-4.5 shrink-0 text-ink-faint"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          aria-hidden="true"
+      {/* The box is the same object on the landing page and on /search, just in
+          a different place and a different width, so it morphs between the two
+          instead of being torn down and redrawn. `share` names the animation
+          class the CSS in globals.css targets; `default="none"` keeps the pair
+          out of every *other* transition on the page - without it, changing a
+          filter chip or drawing a boundary would crossfade the bar (and with it
+          the whole browse view) on a navigation where nothing moved.
+
+          The field and the buttons are named separately from the box for one
+          reason: only the box actually changes shape. Left as part of the box's
+          snapshot they would be stretched from 768px to full width with it,
+          which smears the query text and the button. Captured on their own they
+          are painted at their natural size against their own edge, so the box
+          grows while the text and the buttons stay sharp and simply travel. */}
+      <ViewTransition name="search-box" share="search-morph" default="none">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+          className="card flex items-center gap-2 p-2 shadow-[0_1px_3px_rgba(28,26,23,0.05)] focus-within:border-brand focus-within:shadow-[0_0_0_3px_var(--color-brand-soft)]"
         >
-          <circle cx="9" cy="9" r="6" />
-          <path d="m14 14 4 4" strokeLinecap="round" />
-        </svg>
-        <input
-          type="text"
-          value={values.q}
-          onChange={(e) => setValues((v) => ({ ...v, q: e.target.value }))}
-          placeholder="Describe the room you want, in your own words"
-          aria-label="Describe the room you want"
-          autoFocus={autoFocus}
-          className="min-w-0 flex-1 bg-transparent py-1.5 text-[15px] text-ink outline-none placeholder:text-ink-faint"
-        />
-        <button
-          type="button"
-          onClick={() => setFiltersOpen((o) => !o)}
-          aria-expanded={filtersOpen}
-          className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[13px] text-ink-soft transition-colors hover:bg-surface-muted sm:inline-flex"
-        >
-          Filters
-          {activeFilterCount > 0 && (
-            <span className="grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[10px] font-semibold text-white tabular-nums">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
-        <button type="submit" disabled={isPending} className="btn-primary shrink-0">
-          {isPending ? "Searching" : "Search"}
-        </button>
-      </form>
+          <ViewTransition
+            name="search-box-field"
+            share="search-morph"
+            default="none"
+          >
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <svg
+                viewBox="0 0 20 20"
+                className="ml-2 h-4.5 w-4.5 shrink-0 text-ink-faint"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                aria-hidden="true"
+              >
+                <circle cx="9" cy="9" r="6" />
+                <path d="m14 14 4 4" strokeLinecap="round" />
+              </svg>
+              <input
+                type="text"
+                value={values.q}
+                onChange={(e) => setValues((v) => ({ ...v, q: e.target.value }))}
+                placeholder="Describe the room you want, in your own words"
+                aria-label="Describe the room you want"
+                autoFocus={autoFocus}
+                className="min-w-0 flex-1 bg-transparent py-1.5 text-[15px] text-ink outline-none placeholder:text-ink-faint"
+              />
+            </div>
+          </ViewTransition>
+
+          <ViewTransition
+            name="search-box-actions"
+            share="search-morph"
+            default="none"
+          >
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((o) => !o)}
+                aria-expanded={filtersOpen}
+                className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-[13px] text-ink-soft transition-colors hover:bg-surface-muted sm:inline-flex"
+              >
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[10px] font-semibold text-white tabular-nums">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+              {/* Wide enough for "Searching" at rest, so swapping the label
+                  does not resize the button. It shares a snapshot with the
+                  Filters button, which is pinned to the box's right edge - a
+                  22px jump here would slide Filters out from under itself
+                  halfway through the morph. */}
+              <button
+                type="submit"
+                disabled={isPending}
+                className="btn-primary min-w-[7rem] shrink-0"
+              >
+                {isPending ? "Searching" : "Search"}
+              </button>
+            </div>
+          </ViewTransition>
+        </form>
+      </ViewTransition>
 
       <button
         type="button"
