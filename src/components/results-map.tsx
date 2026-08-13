@@ -116,6 +116,11 @@ export function ResultsMap({
           disableDefaultUI: true,
           zoomControl: true,
           gestureHandling: "greedy",
+          // The rooms span ~9km east-west and ~5km north-south, so integer
+          // zoom rounds down a whole step and leaves the pins as a small
+          // cluster in a lot of sea. Fractional zoom lets fitBounds land on
+          // the level that actually fills the panel.
+          isFractionalZoomEnabled: true,
         });
         mapRef.current = map;
 
@@ -124,7 +129,10 @@ export function ResultsMap({
           position: NTU_CAMPUS,
           title: "NTU main campus",
           content: ntuMarkerContent(),
-          zIndex: 1,
+          // Above the price pins. Campus is what every commute on this page is
+          // measured to, and the on-campus rooms sit right on top of it, so a
+          // half-covered NTU label would orient nobody.
+          zIndex: 4,
         });
 
         // Tapping the map itself is the way out of a selection on a phone,
@@ -173,7 +181,17 @@ export function ResultsMap({
         markers.set(pin.id, { marker, el });
       }
 
-      if (pins.length > 0) map.fitBounds(boundsOf(pins), 48);
+      // A marker's label is anchored under its point and spreads sideways, so
+      // the horizontal padding has to clear half a price pill or the
+      // easternmost room loses its price off the edge.
+      if (pins.length > 0) {
+        map.fitBounds(boundsOf(pins), {
+          top: 40,
+          right: 64,
+          bottom: 48,
+          left: 64,
+        });
+      }
       // A single room fits to a point, which Maps reads as maximum zoom.
       if (pins.length === 1 && (map.getZoom() ?? 0) > 16) map.setZoom(16);
     });
@@ -246,7 +264,9 @@ export function ResultsMap({
       )}
 
       {selected && (
-        <div className="pointer-events-none absolute inset-x-2 bottom-2">
+        /* Clear of the bottom strip: Google's logo and attribution have to
+           stay legible, and they sit in that last ~24px. */
+        <div className="pointer-events-none absolute inset-x-2 bottom-7">
           <Link
             href={`/listings/${selected.id}`}
             className="pointer-events-auto flex items-center gap-3 rounded-xl border border-line bg-surface/95 p-2.5 shadow-[0_4px_20px_rgba(28,26,23,0.14)] backdrop-blur-sm transition-colors hover:border-line-strong"

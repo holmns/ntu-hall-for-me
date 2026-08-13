@@ -80,10 +80,12 @@ export function ResultsView({
 
   return (
     <SelectionContext.Provider value={{ selection, select, clear }}>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_384px] lg:gap-6">
-        <div className="min-w-0 lg:order-1">{children}</div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-6">
+        <div className="order-2 min-w-0 lg:order-1">{children}</div>
 
-        <div className="lg:order-2">
+        {/* First on a phone so the map and its collapse toggle are the first
+            thing in reach, second on desktop where it becomes the side panel. */}
+        <div className="order-1 lg:order-2">
           <div className="lg:sticky lg:top-[4.5rem]">
             <button
               type="button"
@@ -102,8 +104,11 @@ export function ResultsView({
               {mapOpen ? "Hide map" : `Show ${pins.length} on a map`}
             </button>
 
+            {/* Capped rather than full-height: fitBounds frames the pins by
+                whichever axis is tighter, so a very tall column zooms out far
+                enough to fit the width and fills the rest with sea. */}
             <div
-              className={`${mapOpen ? "block" : "hidden"} h-[300px] sm:h-[380px] lg:block lg:h-[calc(100vh-6.5rem)]`}
+              className={`${mapOpen ? "block" : "hidden"} h-[300px] sm:h-[380px] lg:block lg:h-[min(calc(100vh-8rem),560px)]`}
             >
               <ResultsMap
                 pins={pins}
