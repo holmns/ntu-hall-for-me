@@ -30,16 +30,24 @@ export function SortSelect({
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
 
-  const options: { value: SortOrder | ""; label: string }[] = [
-    ...(hasQuery ? [{ value: "" as const, label: "Best match" }] : []),
-    { value: "price_asc", label: "Price: low to high" },
-    { value: "price_desc", label: "Price: high to low" },
-    ...(hasQuery ? [{ value: "newest" as const, label: "Newest" }] : []),
-  ];
+  // The unset state is always the first pill; only its name changes. With no
+  // query the pipeline already orders by date, so unset *is* newest - saying
+  // "Best match" there would name one ordering twice, and leaving the option
+  // out entirely would leave the current state with no pill to light up.
+  const options: { value: SortOrder | ""; label: string }[] = hasQuery
+    ? [
+        { value: "", label: "Best match" },
+        { value: "price_asc", label: "Price: low to high" },
+        { value: "price_desc", label: "Price: high to low" },
+        { value: "newest", label: "Newest" },
+      ]
+    : [
+        { value: "", label: "Newest" },
+        { value: "price_asc", label: "Price: low to high" },
+        { value: "price_desc", label: "Price: high to low" },
+      ];
 
-  // Without a query, no sort and "newest" are the same ordering, so the
-  // unset state has to light up the pill that describes it.
-  const current = sort ?? (hasQuery ? "" : "newest");
+  const current = sort ?? "";
 
   function choose(value: SortOrder | "") {
     const params = new URLSearchParams(searchParams.toString());

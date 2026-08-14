@@ -63,11 +63,64 @@ const PIN_BASE =
 const PIN_IDLE = "border-line-strong bg-surface text-ink hover:scale-110";
 const PIN_ACTIVE = "border-brand bg-brand text-white scale-110";
 
+const CLUSTER_IDLE = "border-ink/10 bg-ink text-white hover:scale-110";
+const CLUSTER_ACTIVE = "border-brand bg-brand text-white scale-110";
+
 function pinElement(price: number): HTMLElement {
   const el = document.createElement("div");
   el.className = `${PIN_BASE} ${PIN_IDLE}`;
   el.textContent = `$${price.toLocaleString()}`;
   return el;
+}
+
+function clusterElement(count: number): HTMLElement {
+  const el = document.createElement("div");
+  el.className = `${PIN_BASE} ${CLUSTER_IDLE}`;
+  el.textContent = `${count} rooms`;
+  return el;
+}
+
+/** How close two pins have to be on screen before they are drawn as one. */
+const CLUSTER_PX = 56;
+
+type PinGroup = { key: string; lat: number; lng: number; members: MapPin[] };
+
+/**
+ * Groups pins that would overlap at the current zoom.
+ *
+ * Twenty rooms in west Singapore put five hall pins on top of each other at
+ * the default frame, with prices sliced in half by their neighbours. The
+ * standing answer was "zoom in", which is the one thing a reader scanning the
+ * whole map has not done yet.
+ *
+ * A grid rather than a proper distance pass: at twenty pins it reaches the
+ * same answer for a fraction of the work, and its one artifact - two pins
+ * either side of a cell edge staying apart - resolves itself on the next zoom
+ * step. Cell size comes from the Mercator world size at this zoom, and
+ * latitude is bucketed like longitude, which holds because every room in this
+ * app is within a degree and a half of the equator.
+ */
+function clusterPins(pins: MapPin[], zoom: number): PinGroup[] {
+  const cell = (360 / (256 * 2 ** zoom)) * CLUSTER_PX;
+  const buckets = new Map<string, MapPin[]>();
+
+  for (const pin of pins) {
+    const key = `${Math.floor(pin.lat / cell)}:${Math.floor(pin.lng / cell)}`;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(pin);
+    else buckets.set(key, [pin]);
+  }
+
+  return [...buckets.entries()].map(([cellKey, members]) => ({
+    // A lone pin keeps its listing id, so nothing downstream has to care that
+    // clustering happened at all.
+    key: members.length === 1 ? members[0].id : `cluster:${cellKey}`,
+    // The bubble sits at the middle of what it stands for rather than on top
+    // of whichever member happened to be first.
+    lat: members.reduce((total, m) => total + m.lat, 0) / members.length,
+    lng: members.reduce((total, m) => total + m.lng, 0) / members.length,
+    members,
+  }));
 }
 
 function ntuMarkerContent(): HTMLElement {
@@ -141,8 +194,12 @@ export function ResultsMap({
   // are mutated (restyled) in place on every selection change.
   const markersRef = useRef<Map<
     string,
-    { marker: GAdvancedMarker; el: HTMLElement }
+    { marker: GAdvancedMarker; el: HTMLElement; members: MapPin[] }
   > | null>(null);
+  // Rounded, because fractional zoom is on: a scroll gesture emits a stream of
+  // fractional values, and rebuilding the marker layer on each one would
+  // thrash it. Whole steps are finer than clustering needs anyway.
+  const [zoomStep, setZoomStep] = useState(12);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
   const [status, setStatus] = useState<"loading" | "ready" | "failed">(
@@ -472,29 +529,62 @@ export function ResultsMap({
 
     loadMapClasses(apiKey).then(({ AdvancedMarkerElement }) => {
       if (mapRef.current !== map) return;
-      for (const pin of pins) {
-        const el = pinElement(pin.price);
+
+      for (const group of clusterPins(pinsRef.current, zoomStep)) {
+        const single = group.members.length === 1;
+        const el = single
+          ? pinElement(group.members[0].price)
+          : clusterElement(group.members.length);
+
         const marker = new AdvancedMarkerElement({
           map,
-          position: { lat: pin.lat, lng: pin.lng },
+          position: { lat: group.lat, lng: group.lng },
           content: el,
-          title: pin.title,
+          title: single
+            ? group.members[0].title
+            : `${group.members.length} rooms here`,
           gmpClickable: true,
           zIndex: 2,
         });
-        marker.addEventListener("gmp-click", () =>
-          onSelectRef.current(pin.id),
-        );
-        markers.set(pin.id, { marker, el });
-      }
 
-      fitToPins();
+        marker.addEventListener("gmp-click", () => {
+          if (single) {
+            onSelectRef.current(group.members[0].id);
+            return;
+          }
+          // Framing the members is what pulls them apart, and it lands the
+          // reader on the rooms the bubble stood for rather than somewhere
+          // one zoom step nearer.
+          map.fitBounds(boundsOf(group.members), 64);
+        });
+
+        markers.set(group.key, { marker, el, members: group.members });
+      }
     });
-    // `pins` is intentionally absent: pinKey is its stable identity. areaKey
-    // is here for the one case pinKey misses - a boundary redrawn from no
-    // results to no results, where only the shape to frame has changed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, apiKey, pinKey, areaKey, fitToPins]);
+    // Reads pins through the ref, so the only thing that triggers a rebuild is
+    // the id list actually changing (pinKey) or the scale it is grouped at.
+  }, [status, apiKey, pinKey, zoomStep]);
+
+  // Framing is separate from building, because the marker layer is also
+  // rebuilt on zoom - and re-framing there would drag the map back from
+  // wherever the reader had just zoomed to. areaKey is here for the one case
+  // pinKey misses: a boundary redrawn from no results to no results, where
+  // only the shape to frame has changed.
+  useEffect(() => {
+    if (status !== "ready") return;
+    fitToPins();
+  }, [status, pinKey, areaKey, fitToPins]);
+
+  // Clustering depends on scale, so the layer has to know when scale changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (status !== "ready" || !map) return;
+
+    const sync = () => setZoomStep(Math.round(map.getZoom() ?? 12));
+    sync();
+    const listener = map.addListener("zoom_changed", sync);
+    return () => listener.remove();
+  }, [status]);
 
   // Re-frame when the map's box actually changes size - the first real layout
   // after mount, the mobile map toggle, a window resize. Panning does not
@@ -521,9 +611,15 @@ export function ResultsMap({
     const map = mapRef.current;
     if (status !== "ready" || !map) return;
 
-    for (const [id, { el, marker }] of markersRef.current ?? []) {
-      const active = id === selectedId;
-      el.className = `${PIN_BASE} ${active ? PIN_ACTIVE : PIN_IDLE}`;
+    // A cluster lights up for any room inside it: the reader hovering a card
+    // should still be shown where that room is, even when it is currently
+    // drawn as part of a group.
+    for (const { el, marker, members } of markersRef.current?.values() ?? []) {
+      const active =
+        selectedId != null && members.some((m) => m.id === selectedId);
+      const idle = members.length === 1 ? PIN_IDLE : CLUSTER_IDLE;
+      const on = members.length === 1 ? PIN_ACTIVE : CLUSTER_ACTIVE;
+      el.className = `${PIN_BASE} ${active ? on : idle}`;
       marker.zIndex = active ? 3 : 2;
     }
 
