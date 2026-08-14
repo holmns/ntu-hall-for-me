@@ -24,7 +24,18 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
   const listing = await prisma.listing.findUnique({
     where: { id },
     include: {
-      provider: { select: { id: true, name: true, image: true } },
+      provider: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          // For the trust line below. A seeker is being asked to turn up at a
+          // stranger's flat, and this is the only thing on the page that says
+          // anything about the stranger.
+          createdAt: true,
+          _count: { select: { listings: { where: { status: "ACTIVE" } } } },
+        },
+      },
       images: LISTING_IMAGE_SELECT,
     },
   });
@@ -269,6 +280,28 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
                 </span>
               </span>
             </div>
+
+            {/* Two facts the app already knows, stated plainly. Deliberately
+                not dressed up as verification: nothing here has been checked,
+                and a badge implying otherwise would be worse than saying
+                nothing at all. */}
+            <dl className="mt-3 space-y-1.5 border-t border-line pt-3 text-xs">
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-ink-faint">On Room Finder since</dt>
+                <dd className="text-ink-soft">
+                  {listing.provider.createdAt.toLocaleDateString("en-SG", {
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-ink-faint">Rooms listed</dt>
+                <dd className="tabular-nums text-ink-soft">
+                  {listing.provider._count.listings}
+                </dd>
+              </div>
+            </dl>
 
             <div className="mt-4">
               {isOwner ? (
