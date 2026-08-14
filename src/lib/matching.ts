@@ -45,6 +45,14 @@ export type ChipFilters = {
    */
   tags?: ListingTag[] | null;
   /**
+   * Ceiling on the commute to NTU, in minutes, measured in `commuteMode`.
+   * Reads the columns cached at write time - search never calls a Maps API.
+   * Never relaxed, for the same reason as `tags`.
+   */
+  maxCommuteMin?: number | null;
+  /** Which cached column `maxCommuteMin` is compared against. */
+  commuteMode?: TravelMode | null;
+  /**
    * A boundary the seeker drew on the map. Never relaxed - see `hardFilter`.
    */
   area?: AreaPoint[] | null;
@@ -338,6 +346,18 @@ async function runFilter(
   if (chips.area) {
     const area = chips.area;
     listings = listings.filter((l) => isInsideArea(l, area));
+  }
+
+  // The seeker's own commute ceiling. Applied before the model's and never
+  // relaxed: `ignoreCommute` is the ladder loosening a limit the model
+  // inferred, which has nothing to say about one that was ticked.
+  if (chips.maxCommuteMin != null) {
+    const chipMode = chips.commuteMode ?? intent.travelMode ?? "transit";
+    const limit = chips.maxCommuteMin;
+    listings = listings.filter(
+      (l) =>
+        l.category === "ON_CAMPUS" || commuteMinutes(l, chipMode) <= limit,
+    );
   }
 
   if (attempt.ignoreCommute || intent.maxCommuteMin == null) return listings;

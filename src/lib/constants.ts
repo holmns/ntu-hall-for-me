@@ -151,6 +151,15 @@ export const TRAVEL_MODE_LABELS = {
 } as const;
 
 /**
+ * The commute ceilings the filter panel offers, in minutes.
+ *
+ * A fixed set rather than free entry, and the search page validates against
+ * this list: a URL carrying ?commute=7 would narrow the results in a way the
+ * panel could neither display nor clear.
+ */
+export const COMMUTE_BANDS = [15, 30, 45] as const;
+
+/**
  * On-campus listings are informal, student-to-student arrangements. NTU does
  * not sanction them and this app is not connected to hall balloting.
  */

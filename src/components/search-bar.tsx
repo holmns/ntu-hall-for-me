@@ -10,10 +10,13 @@ import {
 } from "@/components/search-progress";
 import {
   CATEGORY_LABELS,
+  COMMUTE_BANDS,
   ROOM_TYPE_LABELS,
   TAG_GROUPS,
   TAG_LABELS,
+  TRAVEL_MODE_LABELS,
 } from "@/lib/constants";
+import type { TravelMode } from "@/lib/matching";
 import type {
   ListingCategory,
   ListingTag,
@@ -27,6 +30,9 @@ export type SearchBarValues = {
   minPrice: string;
   maxPrice: string;
   tags: ListingTag[];
+  /** Minutes, as a string so it round-trips through the URL unchanged. */
+  commute: string;
+  commuteMode: TravelMode | "";
 };
 
 /**
@@ -110,6 +116,8 @@ export function SearchBar({
     minPrice: initial?.minPrice ?? "",
     maxPrice: initial?.maxPrice ?? "",
     tags: initial?.tags ?? [],
+    commute: initial?.commute ?? "",
+    commuteMode: initial?.commuteMode ?? "",
   });
   const [filtersOpen, setFiltersOpen] = useState(
     Boolean(
@@ -117,7 +125,8 @@ export function SearchBar({
         initial?.roomType ||
         initial?.minPrice ||
         initial?.maxPrice ||
-        initial?.tags?.length,
+        initial?.tags?.length ||
+        initial?.commute,
     ),
   );
 
@@ -136,6 +145,12 @@ export function SearchBar({
     // Repeated rather than comma-joined: one param per tag keeps the URL
     // readable and means a malformed one drops itself, not the others.
     for (const tag of next.tags) params.append("tag", tag);
+    if (next.commute) {
+      params.set("commute", next.commute);
+      // Only carried alongside a limit: a travel mode on its own filters
+      // nothing, and would sit in the URL looking like it did.
+      if (next.commuteMode) params.set("mode", next.commuteMode);
+    }
     // Carried over rather than rebuilt: the boundary is drawn on the map, not
     // in this form, and a new search must not silently throw it away.
     const area = searchParams?.get("area");
@@ -167,9 +182,13 @@ export function SearchBar({
   // Tags count one each: ticking four amenities is four narrowings, and a
   // badge reading "1" next to four active pills would undercount the filter.
   const activeFilterCount =
-    [values.category, values.roomType, values.minPrice, values.maxPrice].filter(
-      Boolean,
-    ).length + values.tags.length;
+    [
+      values.category,
+      values.roomType,
+      values.minPrice,
+      values.maxPrice,
+      values.commute,
+    ].filter(Boolean).length + values.tags.length;
 
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -202,6 +221,8 @@ export function SearchBar({
       minPrice: "",
       maxPrice: "",
       tags: [],
+      commute: "",
+      commuteMode: "",
     };
     setValues((v) => ({ ...v, ...cleared }));
     setFiltersOpen(false);
@@ -404,6 +425,81 @@ export function SearchBar({
                   className="field min-w-0"
                 />
               </div>
+            </fieldset>
+          </div>
+
+          {/* The app pays Distance Matrix for these three numbers on every
+              listing and caches them on the row. They were readable on the
+              cards and filterable only if the seeker happened to phrase a
+              duration the parser recognised. This reads the stored columns -
+              no Maps call, one comparison. */}
+          <div className="mt-5 border-t border-line pt-4">
+            <fieldset>
+              <legend className="mb-2 text-xs font-medium text-ink-soft">
+                Commute to NTU
+              </legend>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  { value: "", label: "Any" },
+                  ...COMMUTE_BANDS.map((m) => ({
+                    value: String(m),
+                    label: `Under ${m} min`,
+                  })),
+                ].map((band) => {
+                  const active = values.commute === band.value;
+                  return (
+                    <button
+                      key={band.value || "any"}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() =>
+                        setValues((v) => ({ ...v, commute: band.value }))
+                      }
+                      className={`rounded-full border px-3 py-1.5 text-[13px] transition-colors ${
+                        active
+                          ? "border-brand bg-brand-soft font-medium text-brand"
+                          : "border-line bg-surface text-ink-soft hover:border-line-strong hover:bg-surface-muted"
+                      }`}
+                    >
+                      {band.label}
+                    </button>
+                  );
+                })}
+
+                {/* Only once a limit is set: choosing how to travel is
+                    meaningless until there is a duration to measure. */}
+                {values.commute && (
+                  <span className="ml-1 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[13px] text-ink-faint">by</span>
+                    {(
+                      Object.keys(TRAVEL_MODE_LABELS) as TravelMode[]
+                    ).map((m) => {
+                      const active =
+                        (values.commuteMode || "transit") === m;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() =>
+                            setValues((v) => ({ ...v, commuteMode: m }))
+                          }
+                          className={`rounded-full border px-3 py-1.5 text-[13px] transition-colors ${
+                            active
+                              ? "border-brand bg-brand-soft font-medium text-brand"
+                              : "border-line bg-surface text-ink-soft hover:border-line-strong hover:bg-surface-muted"
+                          }`}
+                        >
+                          {TRAVEL_MODE_LABELS[m]}
+                        </button>
+                      );
+                    })}
+                  </span>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-ink-faint">
+                On-campus rooms are always kept: they are already there.
+              </p>
             </fieldset>
           </div>
 

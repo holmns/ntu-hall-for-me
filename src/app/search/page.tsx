@@ -10,7 +10,12 @@ import type { MapPin } from "@/components/results-map";
 import { getCurrentUser } from "@/lib/auth";
 import { savedIdsAmong } from "@/lib/saved";
 import { decodeArea } from "@/lib/area-filter";
-import { ALL_TAGS, ROOM_TYPE_LABELS, TRAVEL_MODE_LABELS } from "@/lib/constants";
+import {
+  ALL_TAGS,
+  COMMUTE_BANDS,
+  ROOM_TYPE_LABELS,
+  TRAVEL_MODE_LABELS,
+} from "@/lib/constants";
 import {
   commuteMinutes,
   REASON_LIMIT,
@@ -54,8 +59,22 @@ function parseChips(sp: Record<string, string | string[] | undefined>): ChipFilt
   const rawTags = sp.tag;
   const tags = (Array.isArray(rawTags) ? rawTags : rawTags ? [rawTags] : [])
     .filter((t): t is ListingTag => (ALL_TAGS as readonly string[]).includes(t));
+  // Only the three offered bands. An arbitrary ?commute=7 is not a filter
+  // anyone can have set from the panel, and honouring it would let a URL
+  // narrow the results in a way the panel could not then show or clear.
+  const commuteRaw = num("commute");
+  const mode = one("mode");
   return {
     tags: tags.length > 0 ? tags : null,
+    maxCommuteMin:
+      commuteRaw != null &&
+      (COMMUTE_BANDS as readonly number[]).includes(commuteRaw)
+        ? commuteRaw
+        : null,
+    commuteMode:
+      mode === "walking" || mode === "transit" || mode === "driving"
+        ? mode
+        : null,
     minPrice: num("min"),
     maxPrice: num("max"),
     category:
@@ -109,6 +128,8 @@ export default async function SearchPage(props: PageProps<"/search">) {
           minPrice: chips.minPrice ? String(chips.minPrice) : "",
           maxPrice: chips.maxPrice ? String(chips.maxPrice) : "",
           tags: chips.tags ?? [],
+          commute: chips.maxCommuteMin ? String(chips.maxCommuteMin) : "",
+          commuteMode: chips.commuteMode ?? "",
         }}
       />
 
@@ -140,7 +161,9 @@ async function Results({
     query,
     chips,
   );
-  const mode = intent.travelMode ?? "transit";
+  // The chip wins: a seeker who filtered on a walk to campus should read walk
+  // minutes on the cards, not the transit ones the model assumed.
+  const mode = chips.commuteMode ?? intent.travelMode ?? "transit";
 
   // After the search, so the shortlist lookup is one indexed query over the
   // ids actually being rendered rather than over everything the user saved.
