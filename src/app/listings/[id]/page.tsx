@@ -42,7 +42,9 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
   const onCampus = listing.category === "ON_CAMPUS";
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+    // max-w-4xl minus a 320px sidebar left the gallery about 520px wide on
+    // every monitor, which is a thumbnail of a room, not a look at one.
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <Link
         href="/search"
         className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft transition-colors hover:text-ink"
@@ -75,7 +77,7 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
         </p>
       )}
 
-      <div className="mt-4 grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="mt-4 grid gap-6 lg:grid-cols-[1fr_360px] lg:gap-8">
         {/* ---------------------------------------------------------------- */}
         <div>
           {listing.images.length > 0 && (
@@ -97,8 +99,12 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
             {listing.title}
           </h1>
 
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-xl font-semibold tabular-nums text-ink">
+          {/* The price lives in the sticky card from lg up, where it leads the
+              thing you act on. Below lg the sidebar stacks underneath the map,
+              which is far too late to first mention what the room costs - so
+              at phone and tablet widths it stays here, under the title. */}
+          <div className="mt-2 flex items-baseline gap-2 lg:hidden">
+            <span className="text-2xl font-semibold tabular-nums tracking-tight text-ink">
               ${listing.price.toLocaleString()}
             </span>
             <span className="text-[13px] text-ink-soft">per month</span>
@@ -179,35 +185,21 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
         </div>
 
         {/* ---------------------------------------------------------------- */}
+        {/* The action card leads, with the price at the top of it: what the
+            room costs and how to ask about it are one decision, and they were
+            split across two columns with the price set smaller than the title
+            above it. The commute follows, since it is a fact about the room
+            rather than something to act on. */}
         <aside className="lg:sticky lg:top-20 lg:self-start">
           <div className="card p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
-              Commute to NTU
-            </h2>
-            {onCampus ? (
-              <p className="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
-                Already on campus, so there is no commute to measure.
-              </p>
-            ) : (
-              <dl className="mt-2.5 space-y-2">
-                <CommuteRow label="Walk" minutes={listing.distanceWalkingMin} />
-                <CommuteRow
-                  label="Bus / MRT"
-                  minutes={listing.distanceTransitMin}
-                />
-                <CommuteRow label="Drive" minutes={listing.distanceDrivingMin} />
-                <div className="flex items-center justify-between border-t border-line pt-2 text-[13px]">
-                  <dt className="text-ink-faint">Distance</dt>
-                  <dd className="tabular-nums text-ink-soft">
-                    {(listing.distanceMeters / 1000).toFixed(1)} km
-                  </dd>
-                </div>
-              </dl>
-            )}
-          </div>
+            <div className="hidden items-baseline gap-2 border-b border-line pb-4 lg:flex">
+              <span className="text-[28px] font-semibold leading-none tabular-nums tracking-tight text-ink">
+                ${listing.price.toLocaleString()}
+              </span>
+              <span className="text-[13px] text-ink-soft">per month</span>
+            </div>
 
-          <div className="card mt-3 p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint lg:mt-4">
               Posted by
             </h2>
             <div className="mt-2.5 flex items-center gap-2.5">
@@ -270,6 +262,32 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="card mt-3 p-5">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+              Commute to NTU
+            </h2>
+            {onCampus ? (
+              <p className="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
+                Already on campus, so there is no commute to measure.
+              </p>
+            ) : (
+              <dl className="mt-2.5 space-y-2">
+                <CommuteRow label="Walk" minutes={listing.distanceWalkingMin} />
+                <CommuteRow
+                  label="Bus / MRT"
+                  minutes={listing.distanceTransitMin}
+                />
+                <CommuteRow label="Drive" minutes={listing.distanceDrivingMin} />
+                <div className="flex items-center justify-between border-t border-line pt-2 text-[13px]">
+                  <dt className="text-ink-faint">Distance</dt>
+                  <dd className="tabular-nums text-ink-soft">
+                    {(listing.distanceMeters / 1000).toFixed(1)} km
+                  </dd>
+                </div>
+              </dl>
+            )}
           </div>
         </aside>
       </div>
