@@ -56,7 +56,22 @@ export type ChipFilters = {
    * A boundary the seeker drew on the map. Never relaxed - see `hardFilter`.
    */
   area?: AreaPoint[] | null;
+  /**
+   * Explicit ordering. Null is "best match", which is the vector shortlist
+   * reordered by the model - the app's whole pitch, and so the default.
+   * Anything else takes the ordering away from both and does it in SQL.
+   */
+  sort?: SortOrder | null;
 };
+
+/**
+ * The orderings offered beside "best match".
+ *
+ * Deliberately small and all expressible in SQL: none of them costs an LLM
+ * call, so a seeker who just wants the cheapest room gets it without paying
+ * for a ranking they are about to override.
+ */
+export type SortOrder = "price_asc" | "price_desc" | "newest";
 
 export type ListingWithProvider = Listing & {
   provider: { id: string; name: string | null; image: string | null };
@@ -263,6 +278,13 @@ const MAX_ROWS = 100;
  * `queryVector` is null when the search bar is empty, which is the only case
  * where recency is the right order: there is no request to be similar to.
  */
+/** One clause per offered sort. Written out so nothing user-supplied reaches SQL. */
+const SORT_SQL: Record<SortOrder, Prisma.Sql> = {
+  price_asc: Prisma.sql`ORDER BY "price" ASC, "createdAt" DESC`,
+  price_desc: Prisma.sql`ORDER BY "price" DESC, "createdAt" DESC`,
+  newest: Prisma.sql`ORDER BY "createdAt" DESC`,
+};
+
 async function runFilter(
   attempt: FilterAttempt,
   chips: ChipFilters,
@@ -313,12 +335,19 @@ async function runFilter(
     );
   }
 
-  // NULLS LAST is load-bearing: a listing whose embedding failed or has not
-  // been backfilled yet still has to appear, just below everything that can be
-  // compared. Dropping it would make rows silently vanish from search.
-  const order = queryVector
-    ? Prisma.sql`ORDER BY "embedding" <=> ${toVectorLiteral(queryVector)}::vector ASC NULLS LAST, "createdAt" DESC`
-    : Prisma.sql`ORDER BY "createdAt" DESC`;
+  // An explicit sort replaces the vector ordering outright rather than
+  // breaking ties within it: someone who asked for cheapest first wants the
+  // cheapest room, not the cheapest of whatever the embedding liked. Price
+  // ties break on recency so the order is stable between identical searches.
+  //
+  // Otherwise, NULLS LAST is load-bearing: a listing whose embedding failed or
+  // has not been backfilled yet still has to appear, just below everything
+  // that can be compared. Dropping it would make rows silently vanish.
+  const order = chips.sort
+    ? SORT_SQL[chips.sort]
+    : queryVector
+      ? Prisma.sql`ORDER BY "embedding" <=> ${toVectorLiteral(queryVector)}::vector ASC NULLS LAST, "createdAt" DESC`
+      : Prisma.sql`ORDER BY "createdAt" DESC`;
 
   const ordered = await prisma.$queryRaw<{ id: string }[]>`
     SELECT "id" FROM "Listing"
@@ -643,6 +672,27 @@ export async function searchListings(
   // result list; the reasons promise rejects with the same error and the page
   // says so. Attached before the await so the rejection is never unhandled.
   reasons.catch(() => {});
+
+  // With an explicit sort the model's order is discarded and SQL's is kept:
+  // reordering rooms the seeker asked to see cheapest-first would be the
+  // control not working. Nothing to wait for either, so the rooms render as
+  // soon as the database answers rather than after ~120 streamed tokens.
+  //
+  // The reasons are still shown. "Why this room matches" is worth reading
+  // whatever order the rooms are in, and it costs nothing extra: order and
+  // reasons come from one streamed call, and only the order is being dropped.
+  if (chips.sort) {
+    order.catch(() => {});
+    return { intent, listings, reasons, relaxations };
+  }
+
+  // The one thing worth waiting for. It arrives after ~120 streamed tokens,
+  // well before the explanations, and committing to it here is what lets the
+  // cards render in their permanent positions.
+  //
+  // A failed rerank keeps the vector order rather than taking down a valid
+  // result list; the reasons promise rejects with the same error and the page
+  // says so. Attached before the await so the rejection is never unhandled.
   const ranked = await order.catch((error) => {
     console.error("[matching] rerank failed, keeping vector order:", error);
     return listings.slice(0, REASON_LIMIT).map((l) => l.id);

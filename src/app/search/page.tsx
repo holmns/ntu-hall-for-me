@@ -6,6 +6,7 @@ import { IntentPanel } from "@/components/intent-panel";
 import { ResultsView, SelectableCard } from "@/components/results-view";
 import { SearchSettled, SearchStarted } from "@/components/search-progress";
 import { SaveButton } from "@/components/save-button";
+import { SortSelect } from "@/components/sort-select";
 import type { MapPin } from "@/components/results-map";
 import { getCurrentUser } from "@/lib/auth";
 import { savedIdsAmong } from "@/lib/saved";
@@ -64,7 +65,12 @@ function parseChips(sp: Record<string, string | string[] | undefined>): ChipFilt
   // narrow the results in a way the panel could not then show or clear.
   const commuteRaw = num("commute");
   const mode = one("mode");
+  const sort = one("sort");
   return {
+    sort:
+      sort === "price_asc" || sort === "price_desc" || sort === "newest"
+        ? sort
+        : null,
     tags: tags.length > 0 ? tags : null,
     maxCommuteMin:
       commuteRaw != null &&
@@ -203,11 +209,16 @@ async function Results({
         </Suspense>
       )}
 
-      <h2 className="mt-3 text-sm font-medium text-ink-soft">
-        {listings.length} {listings.length === 1 ? "room" : "rooms"}
-        {query.trim() ? " for you" : ""}
-        {chips.area ? " in the area you drew" : ""}
-      </h2>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 className="text-sm font-medium text-ink-soft">
+          {listings.length} {listings.length === 1 ? "room" : "rooms"}
+          {query.trim() && !chips.sort ? " for you" : ""}
+          {chips.area ? " in the area you drew" : ""}
+        </h2>
+        {listings.length > 0 && (
+          <SortSelect sort={chips.sort ?? null} hasQuery={Boolean(query.trim())} />
+        )}
+      </div>
     </>
   );
 
@@ -254,7 +265,10 @@ async function Results({
                     </Suspense>
                   ) : undefined
                 }
-                rank={query.trim() ? index + 1 : undefined}
+                // Only when the model did the ordering. Under an explicit
+                // sort these would be row numbers wearing the ranking's
+                // badge, claiming a judgement nothing made.
+                rank={query.trim() && !chips.sort ? index + 1 : undefined}
                 mode={mode}
                 save={
                   <SaveButton

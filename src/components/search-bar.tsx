@@ -151,10 +151,13 @@ export function SearchBar({
       // nothing, and would sit in the URL looking like it did.
       if (next.commuteMode) params.set("mode", next.commuteMode);
     }
-    // Carried over rather than rebuilt: the boundary is drawn on the map, not
-    // in this form, and a new search must not silently throw it away.
+    // Carried over rather than rebuilt: neither of these is set from this
+    // form - the boundary is drawn on the map and the order is chosen beside
+    // the results - and a new search must not silently throw either away.
     const area = searchParams?.get("area");
     if (area) params.set("area", area);
+    const sort = searchParams?.get("sort");
+    if (sort) params.set("sort", sort);
     // Only a search with words in it lights the box. An empty box orders the
     // rooms by date and calls no model at all - no parse, no embedding, no
     // reasons - so a glow there would be claiming work that is not happening.
