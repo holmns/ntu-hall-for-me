@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition, ViewTransition } from "react";
+import { useEffect, useRef, useState, useTransition, ViewTransition } from "react";
 
 import {
   endSearch,
@@ -18,6 +18,59 @@ export type SearchBarValues = {
   minPrice: string;
   maxPrice: string;
 };
+
+/**
+ * A small enumeration as a row of pills, "Any" first.
+ *
+ * A native <select> was doing this job, which meant the two controls a seeker
+ * reaches for most were the only OS-drawn widgets in an app whose vocabulary
+ * is pills everywhere else - and it hid both the options and the current
+ * choice behind a click. These are the same pills the post form uses to set
+ * the tags, so the thing a provider ticks and the thing a seeker filters on
+ * now look like the same kind of thing.
+ */
+function PillGroup<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T | "";
+  options: { value: T; label: string }[];
+  onChange: (next: T | "") => void;
+}) {
+  const choices: { value: T | ""; label: string }[] = [
+    { value: "", label: "Any" },
+    ...options,
+  ];
+
+  return (
+    <fieldset className="min-w-0">
+      <legend className="mb-2 text-xs font-medium text-ink-soft">{label}</legend>
+      <div className="flex flex-wrap gap-1.5">
+        {choices.map((choice) => {
+          const active = value === choice.value;
+          return (
+            <button
+              key={choice.value || "any"}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(choice.value)}
+              className={`rounded-full border px-3 py-1.5 text-[13px] transition-colors ${
+                active
+                  ? "border-brand bg-brand-soft font-medium text-brand"
+                  : "border-line bg-surface text-ink-soft hover:border-line-strong hover:bg-surface-muted"
+              }`}
+            >
+              {choice.label}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
 
 const EXAMPLES = [
   "quiet room near campus, under $700, don't mind sharing",
@@ -51,14 +104,18 @@ export function SearchBar({
     Boolean(initial?.category || initial?.roomType || initial?.minPrice || initial?.maxPrice),
   );
 
-  function submit(overrideQuery?: string) {
+  // Takes an override rather than reading state, because the two callers that
+  // change a value and search in the same click - an example chip, Clear all -
+  // would otherwise submit the values from before their own setState.
+  function submit(override?: Partial<SearchBarValues>) {
+    const next = { ...values, ...override };
     const params = new URLSearchParams();
-    const q = (overrideQuery ?? values.q).trim();
+    const q = next.q.trim();
     if (q) params.set("q", q);
-    if (values.category) params.set("category", values.category);
-    if (values.roomType) params.set("roomType", values.roomType);
-    if (values.minPrice) params.set("min", values.minPrice);
-    if (values.maxPrice) params.set("max", values.maxPrice);
+    if (next.category) params.set("category", next.category);
+    if (next.roomType) params.set("roomType", next.roomType);
+    if (next.minPrice) params.set("min", next.minPrice);
+    if (next.maxPrice) params.set("max", next.maxPrice);
     // Carried over rather than rebuilt: the boundary is drawn on the map, not
     // in this form, and a new search must not silently throw it away.
     const area = searchParams?.get("area");
@@ -94,8 +151,47 @@ export function SearchBar({
     values.maxPrice,
   ].filter(Boolean).length;
 
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // The panel floats over the results, so it has to close the way a floating
+  // panel does. A backdrop would be simpler but it would also swallow clicks
+  // on the query field behind it; listening from the document leaves the rest
+  // of the page live while the panel is open.
+  useEffect(() => {
+    if (!filtersOpen) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setFiltersOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFiltersOpen(false);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [filtersOpen]);
+
+  function clearFilters() {
+    const cleared = {
+      category: "",
+      roomType: "",
+      minPrice: "",
+      maxPrice: "",
+    } as const;
+    setValues((v) => ({ ...v, ...cleared }));
+    setFiltersOpen(false);
+    submit(cleared);
+  }
+
   return (
-    <div className="w-full">
+    // `relative` anchors the filter panel, which is positioned rather than
+    // laid out: in flow it pushed the map and the whole results grid down the
+    // page every time someone opened it.
+    <div ref={rootRef} className="relative w-full">
       {/* The box is the same object on the landing page and on /search, just in
           a different place and a different width, so it morphs between the two
           instead of being torn down and redrawn. `share` names the animation
@@ -202,90 +298,86 @@ export function SearchBar({
       </button>
 
       {filtersOpen && (
-        <div className="card mt-2 grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-medium text-ink-soft">
-              Category
-            </span>
-            <select
+        <div
+          role="group"
+          aria-label="Filters"
+          className="card absolute inset-x-0 top-full z-30 mt-2 p-4 shadow-[0_10px_30px_rgba(28,26,23,0.12)] sm:p-5"
+        >
+          <div className="grid gap-5 sm:grid-cols-3">
+            <PillGroup
+              label="Category"
               value={values.category}
-              onChange={(e) =>
-                setValues((v) => ({
-                  ...v,
-                  category: e.target.value as ListingCategory | "",
-                }))
-              }
-              className="field"
-            >
-              <option value="">Any</option>
-              {(
-                Object.keys(CATEGORY_LABELS) as ListingCategory[]
-              ).map((c) => (
-                <option key={c} value={c}>
-                  {CATEGORY_LABELS[c]}
-                </option>
-              ))}
-            </select>
-          </label>
+              options={(Object.keys(CATEGORY_LABELS) as ListingCategory[]).map(
+                (c) => ({ value: c, label: CATEGORY_LABELS[c] }),
+              )}
+              onChange={(category) => setValues((v) => ({ ...v, category }))}
+            />
 
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-medium text-ink-soft">
-              Room type
-            </span>
-            <select
+            <PillGroup
+              label="Room type"
               value={values.roomType}
-              onChange={(e) =>
-                setValues((v) => ({
-                  ...v,
-                  roomType: e.target.value as RoomType | "",
-                }))
-              }
-              className="field"
+              options={(Object.keys(ROOM_TYPE_LABELS) as RoomType[]).map(
+                (r) => ({ value: r, label: ROOM_TYPE_LABELS[r] }),
+              )}
+              onChange={(roomType) => setValues((v) => ({ ...v, roomType }))}
+            />
+
+            <fieldset className="min-w-0">
+              <legend className="mb-2 text-xs font-medium text-ink-soft">
+                Monthly rent (SGD)
+              </legend>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={50}
+                  value={values.minPrice}
+                  onChange={(e) =>
+                    setValues((v) => ({ ...v, minPrice: e.target.value }))
+                  }
+                  placeholder="0"
+                  aria-label="Minimum monthly rent in SGD"
+                  className="field min-w-0"
+                />
+                <span className="shrink-0 text-[13px] text-ink-faint">to</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={50}
+                  value={values.maxPrice}
+                  onChange={(e) =>
+                    setValues((v) => ({ ...v, maxPrice: e.target.value }))
+                  }
+                  placeholder="Any"
+                  aria-label="Maximum monthly rent in SGD"
+                  className="field min-w-0"
+                />
+              </div>
+            </fieldset>
+          </div>
+
+          <div className="mt-5 flex items-center justify-between gap-3 border-t border-line pt-4">
+            <button
+              type="button"
+              onClick={clearFilters}
+              disabled={activeFilterCount === 0}
+              className="text-[13px] font-medium text-ink-soft underline-offset-2 transition-colors hover:text-ink hover:underline disabled:cursor-default disabled:text-ink-faint disabled:no-underline"
             >
-              <option value="">Any</option>
-              {(Object.keys(ROOM_TYPE_LABELS) as RoomType[]).map((r) => (
-                <option key={r} value={r}>
-                  {ROOM_TYPE_LABELS[r]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-medium text-ink-soft">
-              Min price (SGD)
-            </span>
-            <input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              step={50}
-              value={values.minPrice}
-              onChange={(e) =>
-                setValues((v) => ({ ...v, minPrice: e.target.value }))
-              }
-              placeholder="0"
-              className="field"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-medium text-ink-soft">
-              Max price (SGD)
-            </span>
-            <input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              step={50}
-              value={values.maxPrice}
-              onChange={(e) =>
-                setValues((v) => ({ ...v, maxPrice: e.target.value }))
-              }
-              placeholder="Any"
-              className="field"
-            />
-          </label>
+              Clear all
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFiltersOpen(false);
+                submit();
+              }}
+              className="btn-primary"
+            >
+              Show results
+            </button>
+          </div>
         </div>
       )}
 
@@ -298,7 +390,7 @@ export function SearchBar({
               type="button"
               onClick={() => {
                 setValues((v) => ({ ...v, q: example }));
-                submit(example);
+                submit({ q: example });
               }}
               className="rounded-full border border-line bg-surface px-3 py-1.5 text-xs text-ink-soft transition-colors hover:border-brand-line hover:bg-brand-soft hover:text-brand"
             >
