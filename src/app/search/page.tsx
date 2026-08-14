@@ -11,10 +11,13 @@ import type { MapPin } from "@/components/results-map";
 import { getCurrentUser } from "@/lib/auth";
 import { savedIdsAmong } from "@/lib/saved";
 import { decodeArea } from "@/lib/area-filter";
+import { NoResults, type Removable } from "@/components/no-results";
 import {
   ALL_TAGS,
+  CATEGORY_LABELS,
   COMMUTE_BANDS,
   ROOM_TYPE_LABELS,
+  TAG_LABELS,
   TRAVEL_MODE_LABELS,
 } from "@/lib/constants";
 import {
@@ -95,6 +98,60 @@ function parseChips(sp: Record<string, string | string[] | undefined>): ChipFilt
     // everything. Better than an error page over a mangled query string.
     area: decodeArea(one("area")),
   };
+}
+
+/**
+ * The constraints the seeker set that a zero-result page can offer to undo.
+ *
+ * Only chips. Everything the model guessed at has already been loosened by
+ * `hardFilter`'s relaxation ladder by the time results come back empty, so
+ * anything still narrowing the search was set deliberately - and each label
+ * names the value, not the field, so the button says what it will actually do.
+ */
+function removableChips(chips: ChipFilters): Removable[] {
+  const out: Removable[] = [];
+  if (chips.minPrice != null || chips.maxPrice != null) {
+    const min = chips.minPrice;
+    const max = chips.maxPrice;
+    out.push({
+      key: "price",
+      label:
+        min != null && max != null
+          ? `Drop the $${min}-$${max} range`
+          : max != null
+            ? `Drop the $${max} budget`
+            : `Drop the $${min} minimum`,
+    });
+  }
+  if (chips.category) {
+    out.push({
+      key: "category",
+      label: `Drop "${CATEGORY_LABELS[chips.category]}"`,
+    });
+  }
+  if (chips.roomType) {
+    out.push({
+      key: "roomType",
+      label: `Drop "${ROOM_TYPE_LABELS[chips.roomType]}"`,
+    });
+  }
+  if (chips.tags && chips.tags.length > 0) {
+    out.push({
+      key: "tags",
+      label:
+        chips.tags.length === 1
+          ? `Drop "${TAG_LABELS[chips.tags[0]]}"`
+          : `Drop the ${chips.tags.length} amenities`,
+    });
+  }
+  if (chips.maxCommuteMin != null) {
+    out.push({
+      key: "commute",
+      label: `Drop the ${chips.maxCommuteMin} min commute limit`,
+    });
+  }
+  if (chips.area) out.push({ key: "area", label: "Clear the drawn area" });
+  return out;
 }
 
 /** This exact search, so signing in from a save button comes back to it. */
@@ -239,14 +296,7 @@ async function Results({
             narrowed to nothing is exactly when the map and its Clear control
             need to stay on screen. */}
         {listings.length === 0 && (
-          <div className="card mt-3 px-6 py-14 text-center">
-            <p className="text-[15px] font-medium text-ink">No rooms found</p>
-            <p className="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-ink-soft">
-              {chips.area
-                ? "No rooms sit inside the boundary you drew. Redraw it wider, or clear it from the map."
-                : "Nothing is listed that fits those constraints. Try widening the budget or clearing a filter."}
-            </p>
-          </div>
+          <NoResults removable={removableChips(chips)} />
         )}
 
         <div className="mt-3 grid gap-3">
