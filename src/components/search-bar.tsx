@@ -328,13 +328,21 @@ export function SearchBar({
                     does not resize the button. It shares a snapshot with the
                     Filters button, which is pinned to the box's right edge - a
                     22px jump here would slide Filters out from under itself
-                    halfway through the morph. */}
+                    halfway through the morph.
+
+                    Driven by `searching`, not `isPending`, for the same reason
+                    the glow is: `isPending` belongs to one useTransition, and a
+                    search started on the landing page ends that transition the
+                    moment /search is ready to paint - which is well before the
+                    rooms are. The box that renders there is a different mount
+                    with its own transition state, so the label fell back to
+                    "Search" while the pipeline was still running. */}
                 <button
                   type="submit"
-                  disabled={isPending}
+                  disabled={searching}
                   className="btn-primary min-w-[7rem] shrink-0"
                 >
-                  {isPending ? "Searching" : "Search"}
+                  {searching ? "Searching" : "Search"}
                 </button>
               </div>
             </ViewTransition>
