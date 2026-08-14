@@ -121,8 +121,15 @@ export function ResultsView({
     <SelectionContext.Provider value={{ selection, select, clear }}>
       {/* Map first in the source and on the left at desktop widths, the way a
           rental search reads: the map is the browsing surface and the list is
-          the detail beside it. On a phone the two stack, map on top. */}
-      <div className="grid gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_minmax(380px,480px)] lg:gap-5">
+          the detail beside it. On a phone the two stack, map on top.
+
+          The list track is a percentage, not a pixel cap. Capped at 480px it
+          stopped growing at about 1100px of viewport and every pixel after
+          that went to the map, so a 1800px monitor bought more empty Jurong
+          and still showed two and a half cards. As a percentage both columns
+          scale together and a bigger screen buys rooms. The px floor is what
+          stops the list collapsing at the lg breakpoint itself. */}
+      <div className="grid gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_minmax(380px,40%)] lg:gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(420px,44%)]">
         <div className="min-w-0 lg:h-full">
           <div className="lg:h-full">
             <button

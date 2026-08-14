@@ -314,7 +314,9 @@ async function ReasonFailureNotice({ state }: { state: Promise<ReasonState> }) {
  */
 function ResultsSkeleton({ query }: { query: string }) {
   return (
-    <div className="grid gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_minmax(380px,480px)] lg:gap-5">
+    // Track sizes must stay in step with ResultsView's grid, or the cold load
+    // reflows into a differently-proportioned page the moment the data lands.
+    <div className="grid gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_minmax(380px,40%)] lg:gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(420px,44%)]">
       {/* This fallback only ever renders for a search this tab did not start -
           a shared link, a reload, or Browse in the header - so it is the one
           place that has to arm the box rather than the other way round. Only
