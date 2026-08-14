@@ -68,6 +68,29 @@ export function CommuteBadge({
 }
 
 /**
+ * How long a room has been up.
+ *
+ * The standard proxy for "is this still going", and it matters more here than
+ * on a general rental site: sublets are semester-driven, so a room posted in
+ * March is far more likely to be gone than a flat listed in March would be.
+ * Exact dates past a month, because "63 days ago" is arithmetic, not an answer.
+ */
+function listedAgo(createdAt: Date): string {
+  const days = Math.floor((Date.now() - createdAt.getTime()) / 86_400_000);
+  if (days <= 0) return "Listed today";
+  if (days === 1) return "Listed yesterday";
+  if (days < 7) return `Listed ${days} days ago`;
+  if (days < 31) {
+    const weeks = Math.floor(days / 7);
+    return `Listed ${weeks} week${weeks === 1 ? "" : "s"} ago`;
+  }
+  return `Listed ${createdAt.toLocaleDateString("en-SG", {
+    day: "numeric",
+    month: "short",
+  })}`;
+}
+
+/**
  * Cover photo, or a neutral placeholder so a listing without one still lines
  * up with the listings that have them. The caller owns the box: a row card
  * wants a fixed rounded panel beside the text, a stacked card wants the photo
@@ -192,6 +215,9 @@ export function ListingCard({
         <MetaItem>
           <CommuteBadge listing={listing} mode={mode} />
         </MetaItem>
+        <MetaItem>
+          <span className="text-ink-faint">{listedAgo(listing.createdAt)}</span>
+        </MetaItem>
       </div>
 
     </div>
@@ -212,6 +238,23 @@ export function ListingCard({
         </span>
       )}
     </div>
+  );
+
+  // Only past one photo. A "1" would be telling the reader what they can
+  // already see, and the badge exists to say there is more behind the cover.
+  const photoCount = listing.images.length > 1 && (
+    <span className="pointer-events-none inline-flex items-center gap-1 rounded-md bg-black/55 px-1.5 py-0.5 text-[11px] font-medium text-white tabular-nums backdrop-blur-[2px]">
+      <svg
+        viewBox="0 0 16 16"
+        className="h-3 w-3"
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        <path d="M6 2.5a1 1 0 0 0-.8.4L4.5 4H2.8A1.8 1.8 0 0 0 1 5.8v6.4A1.8 1.8 0 0 0 2.8 14h10.4a1.8 1.8 0 0 0 1.8-1.8V5.8A1.8 1.8 0 0 0 13.2 4h-1.7l-.7-1.1a1 1 0 0 0-.8-.4H6Zm2 3.7a2.9 2.9 0 1 1 0 5.8 2.9 2.9 0 0 1 0-5.8Z" />
+      </svg>
+      {listing.images.length}
+      <span className="sr-only"> photos</span>
+    </span>
   );
 
   // Laid over the cover in both layouts. In the row it used to sit in the flex
@@ -252,6 +295,9 @@ export function ListingCard({
             {rankChip && (
               <div className="absolute left-2 top-2 z-10">{rankChip}</div>
             )}
+            {photoCount && (
+              <div className="absolute bottom-2 right-2 z-10">{photoCount}</div>
+            )}
           </div>
           <div className="p-4">
             {head}
@@ -286,6 +332,9 @@ export function ListingCard({
               {save && <div className="absolute right-1 top-1 z-10">{save}</div>}
               {rankChip && (
                 <div className="absolute left-1 top-1 z-10">{rankChip}</div>
+              )}
+              {photoCount && (
+                <div className="absolute bottom-1 right-1 z-10">{photoCount}</div>
               )}
             </div>
 
