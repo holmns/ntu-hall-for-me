@@ -262,6 +262,14 @@ export async function updateListing(
         category,
         price: data.price,
         roomType: data.roomType,
+        // `?? null` rather than left undefined: undefined tells Prisma to leave
+        // the column alone, so clearing a date or a deposit on the edit form
+        // would silently keep the old value.
+        availableFrom: data.availableFrom ?? null,
+        minTermMonths: data.minTermMonths ?? null,
+        maxTermMonths: data.maxTermMonths ?? null,
+        deposit: data.deposit ?? null,
+        housemates: data.housemates ?? null,
         tags: data.tags as never,
         address,
         lat: point.lat,

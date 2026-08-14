@@ -39,6 +39,35 @@ type SeedListing = {
   provider: { name: string; email: string };
 };
 
+/**
+ * Terms for a seeded listing, derived from what the room already says about
+ * itself rather than hand-written twenty times over.
+ *
+ * Every fourth room gets none of them on purpose. "Ask the provider" is a real
+ * state - the fields are optional precisely so someone who has not settled a
+ * date can still publish - and a demo where every listing is fully specified
+ * would never show it.
+ */
+function termsFor(item: SeedListing, index: number) {
+  if (index % 4 === 3) return {};
+
+  const onCampus = item.category === "ON_CAMPUS";
+  const shortLease = item.tags.includes("SHORT_LEASE");
+
+  return {
+    // Spread over the coming few months so the demo has rooms free now and
+    // rooms free later, which is the whole point of the field.
+    availableFrom: new Date(Date.UTC(2026, 8 + (index % 3), 1)),
+    minTermMonths: shortLease ? 4 : onCampus ? 5 : 6,
+    maxTermMonths: shortLease ? 6 : onCampus ? 10 : 24,
+    // A hall sublet is paid to the hall, not to the student subletting it, so
+    // there is usually nothing to put down. A landlord always asks.
+    deposit: onCampus ? 0 : item.price,
+    housemates:
+      item.roomType === "WHOLE_UNIT" ? 0 : item.roomType === "SHARED" ? 3 : 2,
+  };
+}
+
 const LISTINGS: SeedListing[] = [
   // -------------------------------------------------------------------------
   // On-campus sublets (informal, student-to-student)
@@ -456,7 +485,7 @@ async function main() {
 
   console.log(`Seeding ${LISTINGS.length} listings...`);
 
-  for (const item of LISTINGS) {
+  for (const [index, item] of LISTINGS.entries()) {
     const place = NTU_AREA_PLACES.find((p) => p.id === item.placeId);
     if (!place) throw new Error(`Unknown seed place: ${item.placeId}`);
 
@@ -484,6 +513,7 @@ async function main() {
         category: item.category,
         price: item.price,
         roomType: item.roomType,
+        ...termsFor(item, index),
         tags: item.tags,
         address: place.address,
         lat: place.lat,

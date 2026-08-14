@@ -130,6 +130,26 @@ model Listing {
   roomType    RoomType
   tags        ListingTag[]
 
+  /// The terms a room-share seeker decides on, and the first thing they ask
+  /// about if it is missing. All nullable: a provider who does not know yet
+  /// should be able to publish, and the twenty seeded rows predate them. The
+  /// listing page prints "Ask the provider" rather than inventing a value.
+  ///
+  /// Deliberately NOT in the embedding, which covers the public prose only -
+  /// see the note on `embedding`. Dates and deposits are structured facts to
+  /// filter on, and putting them in the vector space would only add noise.
+  ///
+  /// `deposit` and `housemates` distinguish null from 0: no deposit and living
+  /// alone are both real answers, and neither means "unstated".
+  availableFrom DateTime?
+  minTermMonths Int?
+  maxTermMonths Int?
+  /// Security deposit in SGD, usually a multiple of the monthly rent.
+  deposit       Int?
+  /// How many other people already live there. 0 means the seeker would be
+  /// alone, which is a selling point rather than a missing answer.
+  housemates    Int?
+
   /// Exact address, shown publicly on the listing and used for the map pin.
   address String
   /// Exact coordinates. Public: every map in the app renders this point.

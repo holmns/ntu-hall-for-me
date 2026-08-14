@@ -125,6 +125,53 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
             </p>
           </section>
 
+          {/* Always rendered, even when the provider filled none of it in.
+              A seeker who cannot see whether a room is free in August will ask
+              in the first message either way; a row that says "Ask the
+              provider" at least tells them the question is worth asking, and
+              tells the provider what their listing is missing. */}
+          <section className="mt-6">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+              Terms
+            </h2>
+            <dl className="mt-2.5 grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+              <TermRow
+                label="Available from"
+                value={
+                  listing.availableFrom
+                    ? listing.availableFrom.toLocaleDateString("en-SG", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                        timeZone: "UTC",
+                      })
+                    : null
+                }
+              />
+              <TermRow label="Stay" value={termLength(listing)} />
+              <TermRow
+                label="Deposit"
+                value={
+                  listing.deposit == null
+                    ? null
+                    : listing.deposit === 0
+                      ? "None"
+                      : `$${listing.deposit.toLocaleString()}`
+                }
+              />
+              <TermRow
+                label="Other housemates"
+                value={
+                  listing.housemates == null
+                    ? null
+                    : listing.housemates === 0
+                      ? "None, you would have it to yourself"
+                      : String(listing.housemates)
+                }
+              />
+            </dl>
+          </section>
+
           {tags.length > 0 && (
             <section className="mt-6">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
@@ -293,6 +340,38 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
       </div>
     </div>
   );
+}
+
+/** One term, or an honest admission that the listing does not say. */
+function TermRow({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b border-line pb-2 last:border-0 sm:last:border-b">
+      <dt className="shrink-0 text-[13px] text-ink-faint">{label}</dt>
+      <dd
+        className={`text-right text-[14px] ${
+          value ? "text-ink" : "italic text-ink-faint"
+        }`}
+      >
+        {value ?? "Ask the provider"}
+      </dd>
+    </div>
+  );
+}
+
+/** "6 to 12 months", "At least 6 months", "Up to 12 months", or nothing. */
+function termLength(listing: {
+  minTermMonths: number | null;
+  maxTermMonths: number | null;
+}): string | null {
+  const { minTermMonths: min, maxTermMonths: max } = listing;
+  const months = (n: number) => `${n} month${n === 1 ? "" : "s"}`;
+
+  if (min != null && max != null) {
+    return min === max ? months(min) : `${min} to ${months(max)}`;
+  }
+  if (min != null) return `At least ${months(min)}`;
+  if (max != null) return `Up to ${months(max)}`;
+  return null;
 }
 
 /**

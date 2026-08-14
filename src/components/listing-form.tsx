@@ -28,6 +28,12 @@ export type ListingFormValues = {
   description: string;
   roomType: RoomType;
   price: number | "";
+  /** ISO yyyy-mm-dd, which is what <input type="date"> reads and writes. */
+  availableFrom: string;
+  minTermMonths: number | "";
+  maxTermMonths: number | "";
+  deposit: number | "";
+  housemates: number | "";
   tags: ListingTag[];
   address: string;
   lat: number;
@@ -39,6 +45,11 @@ export const BLANK_LISTING: ListingFormValues = {
   description: "",
   roomType: "SINGLE",
   price: "",
+  availableFrom: "",
+  minTermMonths: "",
+  maxTermMonths: "",
+  deposit: "",
+  housemates: "",
   tags: [],
   address: "",
   lat: 0,
@@ -159,6 +170,98 @@ export function ListingForm({
             {ON_CAMPUS_DISCLAIMER} It will be labelled this way on your listing.
           </p>
         )}
+      </Section>
+
+      {/* Every field here is optional, and the section says so, because a
+          provider who has not agreed a date with their landlord should still
+          be able to publish. The listing page prints "Ask the provider" for
+          anything left blank rather than quietly implying an answer. */}
+      <Section
+        title="Terms"
+        subtitle="All optional, and all of it is what a seeker asks in the first message if the listing does not say. Leave anything you have not settled yet."
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="Available from"
+            error={state.fieldErrors?.availableFrom}
+          >
+            <input
+              name="availableFrom"
+              type="date"
+              defaultValue={values.availableFrom}
+              className="field"
+            />
+          </Field>
+
+          <Field
+            label="Deposit (SGD)"
+            error={state.fieldErrors?.deposit}
+            hint="0 if there is none"
+          >
+            <input
+              name="deposit"
+              type="number"
+              min={0}
+              step={50}
+              defaultValue={values.deposit}
+              placeholder="e.g. 700"
+              className="field"
+            />
+          </Field>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field
+            label="Minimum stay"
+            error={state.fieldErrors?.minTermMonths}
+            hint="months"
+          >
+            <input
+              name="minTermMonths"
+              type="number"
+              min={1}
+              max={36}
+              step={1}
+              defaultValue={values.minTermMonths}
+              placeholder="e.g. 6"
+              className="field"
+            />
+          </Field>
+
+          <Field
+            label="Maximum stay"
+            error={state.fieldErrors?.maxTermMonths}
+            hint="months"
+          >
+            <input
+              name="maxTermMonths"
+              type="number"
+              min={1}
+              max={36}
+              step={1}
+              defaultValue={values.maxTermMonths}
+              placeholder="e.g. 12"
+              className="field"
+            />
+          </Field>
+
+          <Field
+            label="Other housemates"
+            error={state.fieldErrors?.housemates}
+            hint="0 if none"
+          >
+            <input
+              name="housemates"
+              type="number"
+              min={0}
+              max={20}
+              step={1}
+              defaultValue={values.housemates}
+              placeholder="e.g. 2"
+              className="field"
+            />
+          </Field>
+        </div>
       </Section>
 
       <Section

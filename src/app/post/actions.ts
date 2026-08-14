@@ -90,6 +90,13 @@ export async function createListing(
       category,
       price: data.price,
       roomType: data.roomType,
+      // Undefined where the provider left the field blank, which Prisma stores
+      // as NULL - the listing page reads that as "not stated" and says so.
+      availableFrom: data.availableFrom,
+      minTermMonths: data.minTermMonths,
+      maxTermMonths: data.maxTermMonths,
+      deposit: data.deposit,
+      housemates: data.housemates,
       tags: data.tags as never,
       address,
       lat: point.lat,

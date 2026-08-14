@@ -72,6 +72,16 @@ export default async function EditListingPage(
           description: listing.description,
           roomType: listing.roomType,
           price: listing.price,
+          // <input type="date"> only accepts yyyy-mm-dd, and toISOString is
+          // UTC - which is what the column holds, since the form posts a bare
+          // date with no zone.
+          availableFrom: listing.availableFrom
+            ? listing.availableFrom.toISOString().slice(0, 10)
+            : "",
+          minTermMonths: listing.minTermMonths ?? "",
+          maxTermMonths: listing.maxTermMonths ?? "",
+          deposit: listing.deposit ?? "",
+          housemates: listing.housemates ?? "",
           tags: listing.tags as ListingTag[],
           address: listing.address,
           lat: listing.lat,
