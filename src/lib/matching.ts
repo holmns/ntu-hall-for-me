@@ -174,9 +174,46 @@ function browseAllIntent(): SeekerIntent {
 }
 
 /** Throws if OpenRouter is unreachable - the caller renders an error state. */
+/**
+ * Parsed intents, keyed by the exact query text.
+ *
+ * The same sentence always produces the same reading - one prompt, one model,
+ * and `groundIntent` is pure - so parsing it twice is a paid round trip for an
+ * answer already known. Worth caching because a query is almost never parsed
+ * once: choosing a sort, ticking a filter, drawing a boundary and the back
+ * button all re-run the pipeline over the same words, and each of those was
+ * waiting on the model to repeat itself.
+ *
+ * Per process and best effort. A cold start, or a second instance, simply
+ * parses again - which is exactly the behaviour this replaces, so there is
+ * nothing to be correct about beyond not growing without bound.
+ *
+ * Safe to hand the same object to every caller: nothing downstream mutates an
+ * intent. `hardFilter` expresses its relaxation ladder as flags on each
+ * attempt rather than by editing the intent it was given.
+ */
+const INTENT_CACHE_MAX = 200;
+const intentCache = new Map<string, SeekerIntent>();
+
+function rememberIntent(query: string, intent: SeekerIntent): void {
+  intentCache.set(query, intent);
+  if (intentCache.size <= INTENT_CACHE_MAX) return;
+  // Map iterates in insertion order, so the first key is the coldest.
+  const oldest = intentCache.keys().next().value;
+  if (oldest !== undefined) intentCache.delete(oldest);
+}
+
 export async function parseSeekerQuery(query: string): Promise<SeekerIntent> {
   const trimmed = query.trim();
   if (!trimmed) return browseAllIntent();
+
+  const cached = intentCache.get(trimmed);
+  if (cached) {
+    // Re-inserted so the map stays ordered least-recently-used first.
+    intentCache.delete(trimmed);
+    intentCache.set(trimmed, cached);
+    return cached;
+  }
 
   const raw = await chatJson<unknown>({
     system: buildParseSystemPrompt(),
@@ -195,7 +232,7 @@ export async function parseSeekerQuery(query: string): Promise<SeekerIntent> {
     (t) => !mustHaveTags.includes(t),
   );
 
-  return groundIntent(
+  const intent = groundIntent(
     {
       minPrice: normalisePrice(parsed.minPrice),
       maxPrice: normalisePrice(parsed.maxPrice),
@@ -213,6 +250,11 @@ export async function parseSeekerQuery(query: string): Promise<SeekerIntent> {
     },
     trimmed,
   );
+
+  // Only a successful parse. A transient model failure throws, and caching it
+  // would poison that query for the life of the process.
+  rememberIntent(trimmed, intent);
+  return intent;
 }
 
 /**
@@ -700,11 +742,18 @@ export async function searchListings(
 ): Promise<SearchResult> {
   const trimmed = query.trim();
 
+  // The vector exists to order the results. Under an explicit sort SQL does
+  // the ordering and the vector is never read, so embedding the query would be
+  // a paid round trip for a number nothing looks at. Worth skipping on its own
+  // merits, and load-bearing now that the parse is usually cached: it is what
+  // is left on the critical path once the model no longer has to be asked.
+  const needsVector = trimmed.length > 0 && !chips.sort;
+
   // The embedding does not depend on the parse, so the two calls overlap
   // instead of queueing. Browsing with an empty bar does neither.
   const [intent, queryVector] = await Promise.all([
     parseSeekerQuery(query),
-    trimmed ? embedText(trimmed) : Promise.resolve(null),
+    needsVector ? embedText(trimmed) : Promise.resolve(null),
   ]);
 
   const { listings, relaxations } = await hardFilter(intent, chips, queryVector);
