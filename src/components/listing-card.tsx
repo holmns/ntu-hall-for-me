@@ -167,8 +167,8 @@ export function ListingCard({
   const tags = listing.tags as ListingTag[];
   const stacked = layout === "stacked";
 
-  const body = (
-    <div className="min-w-0 flex-1">
+  const head = (
+    <div className="min-w-0">
       <div className="flex items-start justify-between gap-4">
         <h3 className="text-[15px] font-semibold leading-snug text-ink group-hover:text-brand">
           {listing.title}
@@ -194,25 +194,31 @@ export function ListingCard({
         </MetaItem>
       </div>
 
-      {reason}
+    </div>
+  );
 
-      {tags.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {tags.slice(0, 5).map((tag) => (
-            <TagPill key={tag} tag={tag} />
-          ))}
-          {tags.length > 5 && (
-            <span className="self-center text-xs text-ink-faint">
-              +{tags.length - 5} more
-            </span>
-          )}
-        </div>
+  // Outside `head`, so in the row layout it spans the whole card rather than
+  // only the text column. Tags are the most wrappable thing on a card and the
+  // narrowest column is the worst place to wrap them - and running them under
+  // the cover is what fills the space the cover leaves behind.
+  const tagRow = tags.length > 0 && (
+    <div className="mt-3 flex flex-wrap gap-1.5">
+      {tags.slice(0, 5).map((tag) => (
+        <TagPill key={tag} tag={tag} />
+      ))}
+      {tags.length > 5 && (
+        <span className="self-center text-xs text-ink-faint">
+          +{tags.length - 5} more
+        </span>
       )}
     </div>
   );
 
+  // Laid over the cover in both layouts. In the row it used to sit in the flex
+  // line, where the chip and its gap cost 40px of a text column that had 129px
+  // to give at the lg breakpoint.
   const rankChip = rank != null && (
-    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-soft text-xs font-semibold text-brand tabular-nums">
+    <span className="grid h-6 w-6 place-items-center rounded-full bg-brand-soft text-xs font-semibold text-brand tabular-nums shadow-[0_1px_3px_rgba(28,26,23,0.14)]">
       {rank}
     </span>
   );
@@ -222,7 +228,7 @@ export function ListingCard({
     // nested inside an anchor, so the link is stretched over the card instead
     // and the button sits above it.
     <article
-      className={`card group relative transition-all hover:border-line-strong hover:shadow-[0_2px_12px_rgba(28,26,23,0.06)] ${
+      className={`card group relative @container transition-all hover:border-line-strong hover:shadow-[0_2px_12px_rgba(28,26,23,0.06)] ${
         // Stacked runs the photo to the card's own edges, which needs the
         // rounding clipped and the padding moved onto the text block.
         stacked ? "overflow-hidden" : "p-4 sm:p-5"
@@ -243,22 +249,67 @@ export function ListingCard({
               box="aspect-[3/2] w-full overflow-hidden border-b border-line"
             />
             {save && <div className="absolute right-2 top-2 z-10">{save}</div>}
-            {rankChip && <div className="absolute left-2 top-2 z-10">{rankChip}</div>}
+            {rankChip && (
+              <div className="absolute left-2 top-2 z-10">{rankChip}</div>
+            )}
           </div>
-          <div className="p-4">{body}</div>
+          <div className="p-4">
+            {head}
+            {reason}
+            {tagRow}
+          </div>
         </>
       ) : (
-        <div className="flex items-start gap-3 sm:gap-4">
-          {rankChip && <div className="mt-0.5">{rankChip}</div>}
-          <div className="relative shrink-0">
-            <CardCover
-              listing={listing}
-              box="h-[104px] w-[136px] shrink-0 overflow-hidden rounded-lg border border-line sm:h-[150px] sm:w-[200px]"
-            />
-            {save && <div className="absolute right-1 top-1 z-10">{save}</div>}
+        <>
+          {/* Grid rather than a flex line, so the reason can change column
+              without changing place in the DOM.
+
+              Track one is a proportion of the card, not a fixed 200px. The
+              results column is itself a proportion of the viewport and bottoms
+              out around 380px, where a fixed cover plus the rank chip left
+              129px for the title, the price and the commute - and the card's
+              own min-content grew past the column, so the price was clipped
+              off its right edge entirely.
+
+              Row gaps are zero on purpose: the reason and the tag row carry
+              their own top margin, which is what keeps their spacing identical
+              in the stacked layout, where there is no grid at all. */}
+          <div className="grid grid-cols-[minmax(104px,min(32%,200px))_minmax(0,1fr)] items-start gap-x-3 gap-y-0 sm:gap-x-4">
+            {/* Spans the text rows on a wide card so they size to the text
+                rather than stacking below the photo. Row gaps are zero, so
+                spanning more rows than exist costs nothing. */}
+            <div className="relative @md:row-span-3">
+              <CardCover
+                listing={listing}
+                box="aspect-[4/3] w-full overflow-hidden rounded-lg border border-line"
+              />
+              {save && <div className="absolute right-1 top-1 z-10">{save}</div>}
+              {rankChip && (
+                <div className="absolute left-1 top-1 z-10">{rankChip}</div>
+              )}
+            </div>
+
+            {head}
+
+            {/* Beside the cover once the card is wide enough, underneath it
+                when it is not. A wide card has a short text column - one line
+                of title, one of meta - so the reason is what fills the cover's
+                height; a narrow card has a tall one, and the reason sitting in
+                it left the space under the cover empty and the measure too
+                narrow to read. */}
+            {reason && (
+              <div className="col-span-2 min-w-0 @md:col-span-1 @md:col-start-2">
+                {reason}
+              </div>
+            )}
+
+            {tagRow && (
+              <div className="col-span-2 min-w-0 @md:col-span-1 @md:col-start-2">
+                {tagRow}
+              </div>
+            )}
           </div>
-          {body}
-        </div>
+        </>
       )}
     </article>
   );
