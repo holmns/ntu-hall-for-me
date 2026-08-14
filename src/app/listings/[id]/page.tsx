@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { ListingMap } from "@/components/listing-map";
 import { ListingGallery } from "@/components/listing-gallery";
-import { TagPill } from "@/components/listing-card";
+import { ListingCard, TagPill } from "@/components/listing-card";
+import { findSimilarListings } from "@/lib/matching";
 import { SaveButton } from "@/components/save-button";
 import { prisma } from "@/lib/prisma";
 import { LISTING_IMAGE_SELECT } from "@/lib/images";
@@ -375,6 +377,14 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
         </aside>
       </div>
 
+      {/* The page used to end at the location map with a good third of the
+          viewport empty and no next step but the back button. Every listing
+          page in the category has a continuation rail, and here it is unusually
+          cheap: one vector comparison against a row that is already stored. */}
+      <Suspense fallback={null}>
+        <SimilarRooms listingId={listing.id} />
+      </Suspense>
+
       {/* Below lg the sidebar stacks under the location map, so the only way
           to act on a room you have just finished reading about was to scroll
           back up past the whole page. Pinned, it is the highest-converting
@@ -418,6 +428,31 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
           separately in globals.css - it lives outside this container. */}
       <div aria-hidden="true" className="h-4 lg:hidden" />
     </div>
+  );
+}
+
+/**
+ * Streamed in its own boundary so the room itself is never waiting on it: the
+ * reader came for this listing, and the rail is what they read afterwards.
+ */
+async function SimilarRooms({ listingId }: { listingId: string }) {
+  const similar = await findSimilarListings(listingId);
+  if (similar.length === 0) return null;
+
+  return (
+    <section className="mt-10 border-t border-line pt-8">
+      <h2 className="text-lg font-semibold tracking-tight text-ink">
+        Rooms like this one
+      </h2>
+      <p className="mt-1 text-[13px] text-ink-soft">
+        Closest matches by description, not by price or distance.
+      </p>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {similar.map((room) => (
+          <ListingCard key={room.id} listing={room} layout="stacked" />
+        ))}
+      </div>
+    </section>
   );
 }
 

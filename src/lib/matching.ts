@@ -640,6 +640,52 @@ export function rerankAndExplain(
   return { order, reasons };
 }
 
+/**
+ * Rooms most like this one, for the foot of a listing page.
+ *
+ * The same vector the search pipeline orders by, compared against one stored
+ * row instead of a query - so this is one round trip and costs no LLM call, no
+ * embedding call and no Maps call. The comparison is done in SQL against the
+ * subject's own embedding rather than reading it out first, because Prisma
+ * cannot select the Unsupported vector column at all.
+ *
+ * Returns nothing when the subject has not been embedded. A listing with no
+ * vector has no neighbours to speak of, and inventing some from price or
+ * category would be a different feature wearing this one's label.
+ */
+export async function findSimilarListings(
+  listingId: string,
+  limit = 3,
+): Promise<ListingWithProvider[]> {
+  const ordered = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT l."id"
+    FROM "Listing" l, "Listing" subject
+    WHERE subject."id" = ${listingId}
+      AND subject."embedding" IS NOT NULL
+      AND l."id" <> subject."id"
+      AND l."status" = 'ACTIVE'
+      AND l."embedding" IS NOT NULL
+    ORDER BY l."embedding" <=> subject."embedding"
+    LIMIT ${limit}
+  `;
+  if (ordered.length === 0) return [];
+
+  const ids = ordered.map((row) => row.id);
+  const rows = await prisma.listing.findMany({
+    where: { id: { in: ids } },
+    include: {
+      provider: { select: { id: true, name: true, image: true } },
+      images: LISTING_IMAGE_SELECT,
+    },
+  });
+
+  // `IN` does not preserve order, so restore it from the ranked query.
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return ids
+    .map((id) => byId.get(id))
+    .filter((row): row is ListingWithProvider => row != null);
+}
+
 // ---------------------------------------------------------------------------
 // Orchestration
 // ---------------------------------------------------------------------------
