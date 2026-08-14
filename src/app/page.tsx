@@ -21,7 +21,8 @@ export default async function HomePage() {
         images: LISTING_IMAGE_SELECT,
       },
       orderBy: { createdAt: "desc" },
-      take: 4,
+      // Six fills the grid evenly at one, two and three columns.
+      take: 6,
     }),
   ]);
 
@@ -74,9 +75,12 @@ export default async function HomePage() {
             Browse all
           </Link>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        {/* Stacked, unlike the browse list. This grid has a full 1152px to
+            spend on six rooms, and a row card there is a 200px photo beside a
+            very short line of text and a lot of nothing. */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {recent.map((listing) => (
-            <ListingCard key={listing.id} listing={listing} />
+            <ListingCard key={listing.id} listing={listing} layout="stacked" />
           ))}
         </div>
       </section>
