@@ -10,7 +10,7 @@ import type { MapPin } from "@/components/results-map";
 import { getCurrentUser } from "@/lib/auth";
 import { savedIdsAmong } from "@/lib/saved";
 import { decodeArea } from "@/lib/area-filter";
-import { ROOM_TYPE_LABELS, TRAVEL_MODE_LABELS } from "@/lib/constants";
+import { ALL_TAGS, ROOM_TYPE_LABELS, TRAVEL_MODE_LABELS } from "@/lib/constants";
 import {
   commuteMinutes,
   REASON_LIMIT,
@@ -20,7 +20,11 @@ import {
   type ReasonMap,
   type TravelMode,
 } from "@/lib/matching";
-import type { ListingCategory, RoomType } from "@/generated/prisma/enums";
+import type {
+  ListingCategory,
+  ListingTag,
+  RoomType,
+} from "@/generated/prisma/enums";
 
 /**
  * Resolved form of the reasons promise. The rejection is folded into a value
@@ -44,7 +48,14 @@ function parseChips(sp: Record<string, string | string[] | undefined>): ChipFilt
   };
   const category = one("category");
   const roomType = one("roomType");
+  // Repeated ?tag= params. Anything outside the enum is dropped rather than
+  // rejected: a stale shared link should lose the tag it no longer knows, not
+  // the whole search.
+  const rawTags = sp.tag;
+  const tags = (Array.isArray(rawTags) ? rawTags : rawTags ? [rawTags] : [])
+    .filter((t): t is ListingTag => (ALL_TAGS as readonly string[]).includes(t));
   return {
+    tags: tags.length > 0 ? tags : null,
     minPrice: num("min"),
     maxPrice: num("max"),
     category:
@@ -97,6 +108,7 @@ export default async function SearchPage(props: PageProps<"/search">) {
           roomType: chips.roomType ?? "",
           minPrice: chips.minPrice ? String(chips.minPrice) : "",
           maxPrice: chips.maxPrice ? String(chips.maxPrice) : "",
+          tags: chips.tags ?? [],
         }}
       />
 

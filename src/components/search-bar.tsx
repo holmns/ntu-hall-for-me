@@ -8,8 +8,17 @@ import {
   startSearch,
   useSearchRunning,
 } from "@/components/search-progress";
-import { CATEGORY_LABELS, ROOM_TYPE_LABELS } from "@/lib/constants";
-import type { ListingCategory, RoomType } from "@/generated/prisma/enums";
+import {
+  CATEGORY_LABELS,
+  ROOM_TYPE_LABELS,
+  TAG_GROUPS,
+  TAG_LABELS,
+} from "@/lib/constants";
+import type {
+  ListingCategory,
+  ListingTag,
+  RoomType,
+} from "@/generated/prisma/enums";
 
 export type SearchBarValues = {
   q: string;
@@ -17,6 +26,7 @@ export type SearchBarValues = {
   roomType: RoomType | "";
   minPrice: string;
   maxPrice: string;
+  tags: ListingTag[];
 };
 
 /**
@@ -99,9 +109,16 @@ export function SearchBar({
     roomType: initial?.roomType ?? "",
     minPrice: initial?.minPrice ?? "",
     maxPrice: initial?.maxPrice ?? "",
+    tags: initial?.tags ?? [],
   });
   const [filtersOpen, setFiltersOpen] = useState(
-    Boolean(initial?.category || initial?.roomType || initial?.minPrice || initial?.maxPrice),
+    Boolean(
+      initial?.category ||
+        initial?.roomType ||
+        initial?.minPrice ||
+        initial?.maxPrice ||
+        initial?.tags?.length,
+    ),
   );
 
   // Takes an override rather than reading state, because the two callers that
@@ -116,6 +133,9 @@ export function SearchBar({
     if (next.roomType) params.set("roomType", next.roomType);
     if (next.minPrice) params.set("min", next.minPrice);
     if (next.maxPrice) params.set("max", next.maxPrice);
+    // Repeated rather than comma-joined: one param per tag keeps the URL
+    // readable and means a malformed one drops itself, not the others.
+    for (const tag of next.tags) params.append("tag", tag);
     // Carried over rather than rebuilt: the boundary is drawn on the map, not
     // in this form, and a new search must not silently throw it away.
     const area = searchParams?.get("area");
@@ -144,12 +164,12 @@ export function SearchBar({
   // just fired, or it is the one on the page the results are coming to.
   const searching = running && (isPending || pathname === "/search");
 
-  const activeFilterCount = [
-    values.category,
-    values.roomType,
-    values.minPrice,
-    values.maxPrice,
-  ].filter(Boolean).length;
+  // Tags count one each: ticking four amenities is four narrowings, and a
+  // badge reading "1" next to four active pills would undercount the filter.
+  const activeFilterCount =
+    [values.category, values.roomType, values.minPrice, values.maxPrice].filter(
+      Boolean,
+    ).length + values.tags.length;
 
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -176,15 +196,25 @@ export function SearchBar({
   }, [filtersOpen]);
 
   function clearFilters() {
-    const cleared = {
+    const cleared: Partial<SearchBarValues> = {
       category: "",
       roomType: "",
       minPrice: "",
       maxPrice: "",
-    } as const;
+      tags: [],
+    };
     setValues((v) => ({ ...v, ...cleared }));
     setFiltersOpen(false);
     submit(cleared);
+  }
+
+  function toggleTag(tag: ListingTag) {
+    setValues((v) => ({
+      ...v,
+      tags: v.tags.includes(tag)
+        ? v.tags.filter((t) => t !== tag)
+        : [...v.tags, tag],
+    }));
   }
 
   return (
@@ -375,6 +405,45 @@ export function SearchBar({
                 />
               </div>
             </fieldset>
+          </div>
+
+          {/* The same vocabulary, the same groups and the same pills the post
+              form uses to set these. They were fully built on the posting side
+              and unreachable from search, so a seeker who needed pet friendly
+              or female only could only hope the parser inferred it from prose.
+              Ticked here they are hard filters, and unlike the model's guesses
+              they are never relaxed. */}
+          <div className="mt-5 border-t border-line pt-4">
+            <p className="text-xs font-medium text-ink-soft">Must have</p>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {TAG_GROUPS.map((group) => (
+                <fieldset key={group.label} className="min-w-0">
+                  <legend className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+                    {group.label}
+                  </legend>
+                  <div className="flex flex-wrap gap-1.5">
+                    {group.tags.map((tag) => {
+                      const active = values.tags.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => toggleTag(tag)}
+                          className={`rounded-full border px-3 py-1.5 text-[13px] transition-colors ${
+                            active
+                              ? "border-brand bg-brand-soft font-medium text-brand"
+                              : "border-line bg-surface text-ink-soft hover:border-line-strong hover:bg-surface-muted"
+                          }`}
+                        >
+                          {TAG_LABELS[tag]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              ))}
+            </div>
           </div>
 
           <div className="mt-5 flex items-center justify-between gap-3 border-t border-line pt-4">

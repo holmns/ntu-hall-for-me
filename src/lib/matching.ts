@@ -39,6 +39,12 @@ export type ChipFilters = {
   category?: ListingCategory | null;
   roomType?: RoomType | null;
   /**
+   * Amenities the seeker ticked. Every listing must have all of them, and
+   * unlike the model's `mustHaveTags` these are never demoted to preferences:
+   * the relaxation ladder only ever loosens things the model guessed at.
+   */
+  tags?: ListingTag[] | null;
+  /**
    * A boundary the seeker drew on the map. Never relaxed - see `hardFilter`.
    */
   area?: AreaPoint[] | null;
@@ -282,6 +288,12 @@ async function runFilter(
     conditions.push(
       Prisma.sql`"tags"::text[] @> ${intent.mustHaveTags}::text[]`,
     );
+  }
+  // Outside the relaxation gate above on purpose. The ladder only ever loosens
+  // what the model guessed at; a tag the seeker ticked themselves is not a
+  // guess, and quietly returning rooms without it would make the panel a lie.
+  if (chips.tags && chips.tags.length > 0) {
+    conditions.push(Prisma.sql`"tags"::text[] @> ${chips.tags}::text[]`);
   }
   // Bounding box only. It is what SQL can do cheaply and it is enough to keep
   // the row count down; the exact point-in-polygon test runs below, once, on
