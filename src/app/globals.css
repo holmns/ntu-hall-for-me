@@ -149,6 +149,22 @@
   }
 }
 
+/*
+ * A page with a pinned bottom action bar has to keep the site footer out from
+ * under it. A spacer inside the page cannot do this: the footer is rendered by
+ * the root layout, after and outside the page's own container, so it scrolls
+ * up under the bar however much room the page leaves itself.
+ *
+ * Same `:has()` approach as the browse shell above, and for the same reason -
+ * the layout does not know which route is below it. Only below lg, which is
+ * the only width the bar exists at.
+ */
+@media (max-width: 1023.98px) {
+  body:has([data-sticky-cta]) > footer {
+    padding-bottom: 5rem;
+  }
+}
+
 /* ---------------------------------------------------------------------------
    Landing page -> browse page: the search box travels
 

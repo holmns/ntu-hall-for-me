@@ -44,7 +44,10 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
   return (
     // max-w-4xl minus a 320px sidebar left the gallery about 520px wide on
     // every monitor, which is a thumbnail of a room, not a look at one.
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+    //
+    // `data-sticky-cta` is what globals.css keys the footer's bottom padding
+    // off, so the pinned bar below does not sit on top of it.
+    <div data-sticky-cta className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <Link
         href="/search"
         className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft transition-colors hover:text-ink"
@@ -338,6 +341,49 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
           </div>
         </aside>
       </div>
+
+      {/* Below lg the sidebar stacks under the location map, so the only way
+          to act on a room you have just finished reading about was to scroll
+          back up past the whole page. Pinned, it is the highest-converting
+          pattern in the category and every phone-sized competitor has it. */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas/95 px-4 py-3 backdrop-blur-md lg:hidden">
+        <div className="mx-auto flex max-w-6xl items-center gap-4">
+          <div className="min-w-0">
+            <div className="text-[17px] font-semibold leading-tight tabular-nums text-ink">
+              ${listing.price.toLocaleString()}
+            </div>
+            <div className="text-[11px] text-ink-faint">per month</div>
+          </div>
+          <div className="ml-auto shrink-0">
+            {isOwner ? (
+              <Link
+                href={`/listings/${listing.id}/edit`}
+                className="btn-primary"
+              >
+                Edit listing
+              </Link>
+            ) : user ? (
+              <Link
+                href={`/messages/${listing.id}/${listing.providerId}`}
+                className="btn-primary"
+              >
+                Message provider
+              </Link>
+            ) : (
+              <Link
+                href={`/signin?callbackUrl=/listings/${listing.id}`}
+                className="btn-primary"
+              >
+                Sign in to message
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Clears the page's own last element. The site footer is handled
+          separately in globals.css - it lives outside this container. */}
+      <div aria-hidden="true" className="h-4 lg:hidden" />
     </div>
   );
 }
