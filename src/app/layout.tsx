@@ -1,16 +1,29 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Archivo, Figtree } from "next/font/google";
 import "./globals.css";
 
 import { SiteHeader } from "@/components/site-header";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/**
+ * The design system's pair, declared here because that is where next/font has
+ * to be called. Archivo carries every heading and everything that reads as a
+ * control; Figtree is the body face and the app's `font-sans`.
+ *
+ * Archivo is cut to the four weights anything actually sets - the landing
+ * headline is what needs the extra-bold, and shipping the other five weights
+ * to serve one page would be five files nobody reads.
+ *
+ * Geist, which used to be both faces, is gone rather than left declared: an
+ * unused next/font call still emits a stylesheet and a preload.
+ */
+const archivo = Archivo({
+  variable: "--font-archivo",
   subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const figtree = Figtree({
+  variable: "--font-figtree",
   subsets: ["latin"],
 });
 
@@ -24,7 +37,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${archivo.variable} ${figtree.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <SiteHeader />

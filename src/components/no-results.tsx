@@ -69,7 +69,7 @@ export function NoResults({ removable }: { removable: Removable[] }) {
               key={item.key}
               type="button"
               onClick={() => drop([item.key])}
-              className="rounded-full border border-line bg-surface px-3 py-1.5 text-[13px] text-ink-soft transition-colors hover:border-brand-line hover:bg-brand-soft hover:text-brand"
+              className="rounded-full border border-line bg-surface px-3 py-1.5 text-[13px] text-ink-soft transition-colors hover:border-brand-line hover:bg-brand-soft hover:text-brand-ink"
             >
               {item.label}
             </button>
@@ -82,7 +82,7 @@ export function NoResults({ removable }: { removable: Removable[] }) {
             <button
               type="button"
               onClick={() => drop(removable.map((r) => r.key))}
-              className="rounded-full border border-brand bg-brand-soft px-3 py-1.5 text-[13px] font-medium text-brand transition-colors hover:bg-brand-soft/70"
+              className="rounded-full border border-brand bg-brand-soft px-3 py-1.5 text-[13px] font-medium text-brand-ink transition-colors hover:bg-brand-soft/70"
             >
               Clear everything
             </button>

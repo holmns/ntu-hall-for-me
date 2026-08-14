@@ -18,7 +18,7 @@ export default async function SignInPage(props: PageProps<"/signin">) {
   return (
     <div className="mx-auto flex max-w-md flex-col justify-center px-4 py-16 sm:px-6">
       <div className="text-center">
-        <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-brand text-lg font-bold text-white">
+        <span className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-brand text-lg font-bold text-bone">
           N
         </span>
         <h1 className="mt-4 text-2xl font-semibold tracking-tight text-ink">

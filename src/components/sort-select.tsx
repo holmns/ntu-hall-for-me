@@ -60,7 +60,7 @@ export function SortSelect({
             onClick={() => choose(option.value || null)}
             className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
               active
-                ? "border-brand bg-brand-soft font-medium text-brand"
+                ? "border-brand bg-brand-soft font-medium text-brand-ink"
                 : "border-line bg-surface text-ink-soft hover:border-line-strong hover:bg-surface-muted"
             }`}
           >

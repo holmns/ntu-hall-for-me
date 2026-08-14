@@ -107,7 +107,7 @@ export function ChatThread({
                 <div
                   className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-[14px] leading-relaxed ${
                     mine
-                      ? "rounded-br-md bg-brand text-white"
+                      ? "rounded-br-md bg-brand text-bone"
                       : "rounded-bl-md bg-surface-muted text-ink"
                   }`}
                 >
@@ -116,7 +116,7 @@ export function ChatThread({
                   </p>
                   <p
                     className={`mt-1 text-[11px] tabular-nums ${
-                      mine ? "text-white/70" : "text-ink-faint"
+                      mine ? "text-bone/75" : "text-ink-faint"
                     }`}
                   >
                     {new Date(message.createdAt).toLocaleTimeString("en-SG", {
@@ -173,7 +173,7 @@ export function ChatThread({
             </button>
           </div>
           {state.error && (
-            <p className="mt-2 text-xs text-brand">{state.error}</p>
+            <p className="mt-2 text-xs text-brand-ink">{state.error}</p>
           )}
           <p className="mt-2 text-[11px] text-ink-faint">
             Updates every {POLL_INTERVAL_MS / 1000}s. Never send payment before

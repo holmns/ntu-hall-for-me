@@ -212,7 +212,7 @@ export function ImageUploader({
             <path d="m4 17 4.5-4.5L12 16l3-3 5 5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <span className="mt-2.5 text-[14px] font-medium text-ink">
-            Drag photos here, or <span className="text-brand">browse</span>
+            Drag photos here, or <span className="text-brand-ink">browse</span>
           </span>
           <span className="mt-1 text-xs text-ink-faint">
             JPG, PNG or WebP. Up to {MAX_IMAGES_PER_LISTING}, resized in your
@@ -284,7 +284,7 @@ export function ImageUploader({
                 <button
                   type="button"
                   onClick={() => inputRef.current?.click()}
-                  className="flex aspect-[4/3] w-full flex-col items-center justify-center rounded-lg border border-dashed border-line-strong bg-surface-muted/60 text-ink-soft transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
+                  className="flex aspect-[4/3] w-full flex-col items-center justify-center rounded-lg border border-dashed border-line-strong bg-surface-muted/60 text-ink-soft transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand-ink"
                 >
                   <svg
                     viewBox="0 0 16 16"
@@ -319,14 +319,14 @@ export function ImageUploader({
       {rejections.length > 0 && (
         <ul className="mt-2 space-y-1">
           {rejections.map((message) => (
-            <li key={message} className="text-xs text-brand">
+            <li key={message} className="text-xs text-brand-ink">
               {message}
             </li>
           ))}
         </ul>
       )}
 
-      {error && <p className="mt-2 text-xs text-brand">{error}</p>}
+      {error && <p className="mt-2 text-xs text-brand-ink">{error}</p>}
     </div>
   );
 }

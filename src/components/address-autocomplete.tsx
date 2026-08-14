@@ -231,7 +231,7 @@ export function AddressAutocomplete({
             : "Address set. The commute to NTU is calculated from this point."}
         </p>
       )}
-      {error && <p className="mt-1.5 text-xs text-brand">{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-brand-ink">{error}</p>}
 
       <div className="mt-3">
         <LocationPicker

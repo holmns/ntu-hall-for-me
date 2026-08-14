@@ -59,7 +59,7 @@ export function IntentPanel({
             {intent.mustHaveTags.map((tag) => (
               <span
                 key={tag}
-                className="rounded-full border border-brand-line bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand"
+                className="rounded-full border border-brand-line bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand-ink"
               >
                 {TAG_LABELS[tag]} (must have)
               </span>

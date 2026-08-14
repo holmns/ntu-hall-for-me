@@ -1,68 +1,22 @@
-import Link from "next/link";
-
 import { getCurrentUser } from "@/lib/auth";
 import { SignOutButton } from "./auth-buttons";
-import { UserMenu } from "./user-menu";
+import { HeaderBar } from "./header-bar";
 
 export async function SiteHeader() {
   const user = await getCurrentUser();
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-canvas/85 backdrop-blur-md">
-      {/* `site-bar` is the hook globals.css uses to drop the max width on the
-          full-bleed browse page - a 1152px bar of links floating over a map
-          that runs to both edges reads as a broken layout. */}
-      <div className="site-bar mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-6">
-        <Link href="/" className="flex items-center gap-2 shrink-0">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand text-[13px] font-bold text-white">
-            N
-          </span>
-          <span className="text-[15px] font-semibold tracking-tight">
-            Room Finder
-          </span>
-        </Link>
-
-        <nav className="ml-auto flex items-center gap-0.5 text-sm sm:gap-1">
-          <Link
-            href="/search"
-            className="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink sm:px-3"
-          >
-            Browse
-          </Link>
-          {user ? (
-            <>
-              <Link
-                href="/messages"
-                className="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink sm:px-3"
-              >
-                Messages
-              </Link>
-              <Link
-                href="/post"
-                className="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-ink-soft transition-colors hover:bg-surface-muted hover:text-ink sm:px-3"
-              >
-                Post<span className="hidden sm:inline"> a room</span>
-              </Link>
-              {/* Saved rooms, your listings, profile, settings and sign out all
-                  live behind this, which is what keeps the bar to three items
-                  on a phone. */}
-              <UserMenu
-                name={user.name ?? null}
-                email={user.email ?? null}
-                image={user.image ?? null}
-                signOut={<SignOutButton />}
-              />
-            </>
-          ) : (
-            <Link
-              href="/signin"
-              className="btn-primary ml-1 whitespace-nowrap !px-4 !py-1.5"
-            >
-              Sign in
-            </Link>
-          )}
-        </nav>
-      </div>
-    </header>
+    <HeaderBar
+      user={
+        user
+          ? {
+              name: user.name ?? null,
+              email: user.email ?? null,
+              image: user.image ?? null,
+            }
+          : null
+      }
+      signOut={<SignOutButton />}
+    />
   );
 }

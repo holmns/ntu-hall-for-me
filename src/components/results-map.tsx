@@ -61,10 +61,10 @@ const DRAW_MAX_POINTS = 60;
 const PIN_BASE =
   "cursor-pointer select-none whitespace-nowrap rounded-full border px-2 py-[3px] text-[11px] font-semibold tabular-nums shadow-[0_1px_5px_rgba(28,26,23,0.2)] transition-transform duration-150 ease-out";
 const PIN_IDLE = "border-line-strong bg-surface text-ink hover:scale-110";
-const PIN_ACTIVE = "border-brand bg-brand text-white scale-110";
+const PIN_ACTIVE = "border-brand bg-brand text-bone scale-110";
 
-const CLUSTER_IDLE = "border-ink/10 bg-ink text-white hover:scale-110";
-const CLUSTER_ACTIVE = "border-brand bg-brand text-white scale-110";
+const CLUSTER_IDLE = "border-ink/10 bg-ink text-bone hover:scale-110";
+const CLUSTER_ACTIVE = "border-brand bg-brand text-bone scale-110";
 
 function pinElement(price: number): HTMLElement {
   const el = document.createElement("div");
@@ -126,7 +126,7 @@ function clusterPins(pins: MapPin[], zoom: number): PinGroup[] {
 function ntuMarkerContent(): HTMLElement {
   const wrap = document.createElement("div");
   wrap.className =
-    "flex items-center gap-1 rounded-full bg-accent px-2 py-[3px] text-[11px] font-semibold text-white shadow-[0_1px_5px_rgba(28,26,23,0.2)]";
+    "flex items-center gap-1 rounded-full bg-accent px-2 py-[3px] text-[11px] font-semibold text-bone shadow-[0_1px_5px_rgba(28,26,23,0.2)]";
   wrap.textContent = "NTU";
   return wrap;
 }
@@ -689,7 +689,7 @@ export function ResultsMap({
 
       {(drawing || busy) && (
         <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-20">
-          <p className="flex items-center gap-2 rounded-full bg-ink/85 px-3.5 py-1.5 text-[12px] font-medium text-white shadow-[0_2px_10px_rgba(28,26,23,0.25)]">
+          <p className="flex items-center gap-2 rounded-full bg-ink/85 px-3.5 py-1.5 text-[12px] font-medium text-bone shadow-[0_2px_10px_rgba(28,26,23,0.25)]">
             {busy && (
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
             )}

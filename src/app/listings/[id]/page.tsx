@@ -85,7 +85,7 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
           Reactivate it from{" "}
           <Link
             href={`/listings/${listing.id}/edit`}
-            className="font-medium text-brand hover:underline"
+            className="font-medium text-brand-ink hover:underline"
           >
             edit
           </Link>
@@ -127,7 +127,7 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
           </div>
 
           {onCampus && (
-            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900">
+            <p className="mt-4 rounded-xl border border-brand-line bg-brand-soft px-4 py-3 text-[13px] leading-relaxed text-brand-ink">
               {ON_CAMPUS_DISCLAIMER}
             </p>
           )}
@@ -213,7 +213,7 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
             <p className="mt-2.5 flex items-start gap-2 text-[14px] text-ink">
               <svg
                 viewBox="0 0 16 16"
-                className="mt-0.5 h-4 w-4 shrink-0 text-brand"
+                className="mt-0.5 h-4 w-4 shrink-0 text-brand-ink"
                 fill="currentColor"
                 aria-hidden="true"
               >
@@ -226,7 +226,7 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
               href={`https://www.google.com/maps/search/?api=1&query=${listing.lat},${listing.lng}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-2.5 inline-flex items-center gap-1.5 text-[13px] font-medium text-brand hover:underline"
+              className="mt-2.5 inline-flex items-center gap-1.5 text-[13px] font-medium text-brand-ink hover:underline"
             >
               Open in Google Maps
               <svg
@@ -266,7 +266,7 @@ export default async function ListingPage(props: PageProps<"/listings/[id]">) {
               Posted by
             </h2>
             <div className="mt-2.5 flex items-center gap-2.5">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-soft text-sm font-semibold text-brand">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-soft text-sm font-semibold text-brand-ink">
                 {(listing.provider.name ?? "?").charAt(0).toUpperCase()}
               </span>
               <span className="min-w-0">

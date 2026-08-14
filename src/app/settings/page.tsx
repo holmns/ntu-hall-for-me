@@ -54,7 +54,7 @@ export default async function SettingsPage() {
           here. To take a room down, hide or delete it from{" "}
           <Link
             href="/my-listings"
-            className="font-medium text-brand hover:underline"
+            className="font-medium text-brand-ink hover:underline"
           >
             your listings
           </Link>

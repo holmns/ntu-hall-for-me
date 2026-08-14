@@ -43,7 +43,7 @@ export default async function ProfilePage() {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <span className="grid h-full w-full place-items-center bg-brand-soft text-xl font-semibold text-brand">
+              <span className="grid h-full w-full place-items-center bg-brand-soft text-xl font-semibold text-brand-ink">
                 {(account.name ?? account.email ?? "?").charAt(0).toUpperCase()}
               </span>
             )}

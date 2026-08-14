@@ -62,7 +62,7 @@ export default async function ThreadPage(
           </p>
           <Link
             href={`/listings/${listing.id}`}
-            className="mt-0.5 block truncate text-[15px] font-semibold text-ink hover:text-brand"
+            className="mt-0.5 block truncate text-[15px] font-semibold text-ink hover:text-brand-ink"
           >
             {listing.title}
           </Link>

@@ -27,11 +27,18 @@ export function UserMenu({
   email,
   image,
   signOut,
+  overlay = false,
 }: {
   name: string | null;
   email: string | null;
   image: string | null;
   signOut: ReactNode;
+  /**
+   * The button sits on the landing page's hero photo rather than on the canvas.
+   * Only the ring around the avatar changes: the menu itself drops onto the
+   * page below and stays the app's own panel.
+   */
+  overlay?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -79,7 +86,13 @@ export function UserMenu({
         className={`grid h-8 w-8 place-items-center overflow-hidden rounded-full border transition-colors ${
           open
             ? "border-brand ring-2 ring-brand-soft"
-            : "border-line hover:border-line-strong"
+            : overlay
+              ? // `on-photo-shape` lifts the ring off the photo the same way
+                // the logo disc and the nav links are lifted. It is dropped
+                // while the menu is open, where the brand ring says the same
+                // thing louder and the two shadows would stack.
+                "on-photo-shape border-canvas/60 hover:border-canvas"
+              : "border-line hover:border-line-strong"
         }`}
       >
         <Avatar name={label} image={image} />
@@ -143,7 +156,7 @@ function Avatar({ name, image }: { name: string; image: string | null }) {
     );
   }
   return (
-    <span className="grid h-full w-full place-items-center bg-brand-soft text-[13px] font-semibold text-brand">
+    <span className="grid h-full w-full place-items-center bg-brand-soft text-[13px] font-semibold text-brand-ink">
       {name.charAt(0).toUpperCase()}
     </span>
   );

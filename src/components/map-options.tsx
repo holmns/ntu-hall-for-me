@@ -65,7 +65,7 @@ export function MapOptions({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         className={`${BUTTON} ${
-          open ? "bg-brand text-white" : "bg-surface text-ink-soft hover:text-ink"
+          open ? "bg-brand text-bone" : "bg-surface text-ink-soft hover:text-ink"
         }`}
       >
         <svg
@@ -129,7 +129,7 @@ export function MapOptions({
                   <span
                     className={`grid h-4 w-4 shrink-0 place-items-center rounded border transition-colors ${
                       visible
-                        ? "border-brand bg-brand text-white"
+                        ? "border-brand bg-brand text-bone"
                         : "border-line-strong bg-surface"
                     }`}
                   >
@@ -195,7 +195,7 @@ export function DrawBoundaryControl({
       <button
         type="button"
         onClick={onCancel}
-        className={`${BUTTON} hidden bg-brand text-white lg:flex`}
+        className={`${BUTTON} hidden bg-brand text-bone lg:flex`}
       >
         <PencilIcon />
         Cancel
@@ -217,7 +217,7 @@ export function DrawBoundaryControl({
         <button
           type="button"
           onClick={onClear}
-          className={`${BUTTON} bg-surface text-brand hover:text-brand-hover`}
+          className={`${BUTTON} bg-surface text-brand-ink hover:text-brand-hover`}
         >
           <svg
             viewBox="0 0 24 24"

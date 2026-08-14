@@ -254,7 +254,7 @@ async function Results({
       {query.trim() && <IntentPanel intent={intent} count={listings.length} />}
 
       {relaxations.length > 0 && (
-        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+        <div className="mt-3 rounded-xl border border-brand-line bg-brand-soft px-4 py-3 text-[13px] text-brand-ink">
           <span className="font-medium">Nothing matched exactly.</span>{" "}
           {relaxations.join(" ")}
         </div>

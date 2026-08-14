@@ -104,7 +104,7 @@ export function ListingForm({
       ))}
 
       {state.error && (
-        <div className="rounded-xl border border-brand-line bg-brand-soft px-4 py-3 text-[13px] text-brand">
+        <div className="rounded-xl border border-brand-line bg-brand-soft px-4 py-3 text-[13px] text-brand-ink">
           {state.error}
         </div>
       )}
@@ -166,7 +166,7 @@ export function ListingForm({
         </div>
 
         {onCampus && (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900">
+          <p className="rounded-xl border border-brand-line bg-brand-soft px-4 py-3 text-[13px] leading-relaxed text-brand-ink">
             {ON_CAMPUS_DISCLAIMER} It will be labelled this way on your listing.
           </p>
         )}
@@ -333,7 +333,7 @@ export function ListingForm({
                       defaultChecked={values.tags.includes(tag)}
                       className="peer sr-only"
                     />
-                    <span className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-1.5 text-[13px] text-ink-soft transition-colors hover:border-line-strong peer-checked:border-brand peer-checked:bg-brand-soft peer-checked:text-brand peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand">
+                    <span className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-1.5 text-[13px] text-ink-soft transition-colors hover:border-line-strong peer-checked:border-brand peer-checked:bg-brand-soft peer-checked:text-brand-ink peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand">
                       {TAG_LABELS[tag]}
                     </span>
                   </label>
@@ -417,7 +417,7 @@ function Field({
       {hint && !error && (
         <span className="mt-1.5 block text-xs text-ink-faint">{hint}</span>
       )}
-      {error && <span className="mt-1.5 block text-xs text-brand">{error}</span>}
+      {error && <span className="mt-1.5 block text-xs text-brand-ink">{error}</span>}
     </label>
   );
 }

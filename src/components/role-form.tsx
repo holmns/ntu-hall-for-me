@@ -51,7 +51,7 @@ export function RoleForm({ current }: { current: Role }) {
           <span className="text-[13px] text-accent">Saved.</span>
         )}
         {state.error && (
-          <span className="text-[13px] text-brand">{state.error}</span>
+          <span className="text-[13px] text-brand-ink">{state.error}</span>
         )}
       </div>
     </form>

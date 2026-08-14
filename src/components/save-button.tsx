@@ -105,7 +105,7 @@ export function SaveButton({
         variant === "icon"
           ? iconClass(isSaved)
           : `btn-secondary w-full ${
-              isSaved ? "!border-brand-line !bg-brand-soft !text-brand" : ""
+              isSaved ? "!border-brand-line !bg-brand-soft !text-brand-ink" : ""
             }`
       }
     >
@@ -118,7 +118,7 @@ export function SaveButton({
 function iconClass(active: boolean): string {
   return `grid h-8 w-8 place-items-center rounded-full border shadow-[0_1px_4px_rgba(28,26,23,0.12)] backdrop-blur-sm transition-colors ${
     active
-      ? "border-brand-line bg-brand-soft text-brand"
+      ? "border-brand-line bg-brand-soft text-brand-ink"
       : "border-line bg-surface/90 text-ink-faint hover:border-line-strong hover:text-ink"
   }`;
 }

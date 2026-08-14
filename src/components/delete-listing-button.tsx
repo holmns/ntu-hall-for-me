@@ -44,8 +44,8 @@ export function DeleteListingButton({
         onClick={() => dialogRef.current?.showModal()}
         className={
           variant === "prominent"
-            ? "inline-flex items-center justify-center gap-2 rounded-[10px] border border-brand-line bg-surface px-4 py-2.5 text-[15px] font-[550] text-brand transition-colors hover:bg-brand-soft"
-            : "rounded-lg px-3 py-1.5 text-[13px] text-ink-soft transition-colors hover:bg-brand-soft hover:text-brand"
+            ? "inline-flex items-center justify-center gap-2 rounded-[10px] border border-brand-line bg-surface px-4 py-2.5 text-[15px] font-[550] text-brand-ink transition-colors hover:bg-brand-soft"
+            : "rounded-lg px-3 py-1.5 text-[13px] text-ink-soft transition-colors hover:bg-brand-soft hover:text-brand-ink"
         }
       >
         Delete{variant === "prominent" ? " listing" : ""}
@@ -105,7 +105,7 @@ export function DeleteListingButton({
           )}
 
           {state.error && (
-            <p className="mt-3 rounded-lg bg-brand-soft px-3 py-2 text-[13px] text-brand">
+            <p className="mt-3 rounded-lg bg-brand-soft px-3 py-2 text-[13px] text-brand-ink">
               {state.error}
             </p>
           )}

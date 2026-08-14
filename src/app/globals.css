@@ -2,31 +2,81 @@
 
 /* ---------------------------------------------------------------------------
    Design tokens
-   Warm neutral surfaces, NTU-flavoured red accent used sparingly for CTAs.
+
+   The Organic design system: sand ground, terracotta accent, warm ink. It was
+   drawn for the landing page and then taken through the whole app, because a
+   marketing page in one palette and a working page in another are two products
+   as far as the reader is concerned - and the working pages are where anybody
+   who arrives from the landing page immediately ends up.
+
+   What it replaced was a white canvas with an NTU red accent. Nothing about
+   that was wrong on its own, but red is the one hue this ground cannot hold:
+   on sand it reads as an error state.
+
+   Each token names the step it comes from, so the two can be compared.
 --------------------------------------------------------------------------- */
 @theme {
-  --color-canvas: #faf9f7;
-  --color-surface: #ffffff;
-  --color-surface-muted: #f4f2ef;
-  --color-line: #e5e1db;
-  --color-line-strong: #d5cfc6;
+  /* The system states the ground as #f5ead8. The app runs it lighter: at full
+     strength a page of white cards on it reads as two grounds fighting, and
+     the hero is already carrying the warmth for the whole product. The whole
+     light end moved with it so the steps between ground, surface and line are
+     the ones the system drew. */
+  --color-canvas: #f7f3eb; /* bg, lightened */
+  --color-surface: #fffcf7; /* cards and panels, a shade off the ground */
+  --color-surface-muted: #f4ece0; /* tag pills, hovers, empty photo wells */
+  --color-line: #e7dccb;
+  /* divider, which the system states as ink at 16%. Flattened onto the ground,
+     since that is what it is nearly always drawn on. */
+  --color-line-strong: #d8cfc0;
 
-  --color-ink: #1c1a17;
-  --color-ink-soft: #57534e;
-  --color-ink-faint: #8b857d;
+  --color-ink: #201e1d; /* text */
+  --color-ink-soft: #645c50; /* neutral-700 */
+  --color-ink-faint: #82796a; /* neutral-600 */
+  --color-ink-mid: #474238; /* neutral-800 - controls, one step off black */
 
-  --color-brand: #b3202f;
-  --color-brand-hover: #971927;
-  --color-brand-soft: #fdf2f3;
-  --color-brand-line: #f3d4d8;
+  /* Terracotta, in two strengths that are not interchangeable. `brand` is the
+     fill: buttons, active pills, the hero ground. `brand-ink` is the same
+     colour as *type*, because the fill on sand is about 3:1 and every link in
+     the app would fail AA at body size. */
+  --color-brand: #c67139; /* accent */
+  --color-brand-hover: #b2622d; /* accent-600 */
+  --color-brand-ink: #8c491a; /* accent-700 */
+  --color-brand-light: #f6a06b; /* accent-400 - against the dark panel only */
+  --color-brand-soft: #fff2eb; /* accent-100 */
+  --color-brand-line: #ffc6a5; /* accent-300 */
 
+  /* On campus, and the only cool hue in the app. Kept through the repalette:
+     it marks a category rather than decorating one, and a second warm colour
+     would not read as "a different kind of thing" at chip size. */
   --color-accent: #0f766e;
-  --color-accent-soft: #effbf8;
+  --color-accent-soft: #e6f4f1;
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  /* The dark end: the provider panel on the landing page, and the ground for
+     anything that has to sit against the accent rather than beside it. */
+  --color-bark: #2e2b25; /* neutral-900 */
+  --color-bark-line: #dcd3c4; /* neutral-300 - body copy on that panel */
+  --color-bone: #f9f4ed; /* neutral-100 */
 
-  --radius-card: 14px;
+  /* -------------------------------------------------------------------------
+     Landing hero
+
+     The one surface painted on a photograph rather than on the canvas, which
+     is why it needs type and a card ground of its own: `surface` is a shade
+     off `canvas` and would disappear against terracotta, and `ink-soft` on a
+     photo is unreadable at any size.
+  ------------------------------------------------------------------------- */
+  --color-sand-deep: #eee3ce; /* surface - the snapshot cards */
+  --color-cream: #fff2eb; /* accent-100 - type on the hero */
+  --color-cream-bright: #fdf7ec;
+
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  /* Archivo carries every heading and everything that reads as a control. Put
+     on headings in the base layer below rather than page by page, so a heading
+     added later is in the right typeface without being told. */
+  --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 16px;
 }
 
 @layer base {
@@ -42,6 +92,18 @@
     text-rendering: optimizeLegibility;
   }
 
+  /* Every heading in the app, rather than a `font-display` class on each one.
+     The design system sets headings in the display face and body copy in the
+     text face, and a heading that forgets the class is the kind of thing
+     nobody notices until it ships. Sizes and weights stay with the page. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.025em;
+  }
+
   /* Consistent, visible focus ring everywhere. */
   :focus-visible {
     outline: 2px solid var(--color-brand);
@@ -51,7 +113,7 @@
 
   ::selection {
     background-color: var(--color-brand);
-    color: #fff;
+    color: var(--color-bone);
   }
 }
 
@@ -62,15 +124,23 @@
     border-radius: var(--radius-card);
   }
 
+  /* Pill, like every other control in the system. A textarea is the exception
+     below: a 999px radius on a nine-line box curves the first and last lines
+     of type away from the edge and reads as a mistake rather than a style. */
   .field {
     width: 100%;
-    border-radius: 10px;
+    border-radius: 999px;
     border: 1px solid var(--color-line-strong);
     background-color: var(--color-surface);
-    padding: 0.625rem 0.75rem;
+    padding: 0.625rem 0.9375rem;
     font-size: 0.9375rem;
     color: var(--color-ink);
     transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+
+  textarea.field,
+  select.field[multiple] {
+    border-radius: var(--radius-card);
   }
 
   .field::placeholder {
@@ -88,12 +158,13 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border-radius: 10px;
+    border-radius: 999px;
     background-color: var(--color-brand);
-    padding: 0.625rem 1.125rem;
+    padding: 0.625rem 1.25rem;
+    font-family: var(--font-display);
     font-size: 0.9375rem;
-    font-weight: 550;
-    color: #fff;
+    font-weight: 600;
+    color: var(--color-bone);
     transition: background-color 120ms ease;
   }
 
@@ -111,19 +182,55 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border-radius: 10px;
+    border-radius: 999px;
     border: 1px solid var(--color-line-strong);
     background-color: var(--color-surface);
-    padding: 0.625rem 1.125rem;
+    padding: 0.625rem 1.25rem;
+    font-family: var(--font-display);
     font-size: 0.9375rem;
-    font-weight: 550;
-    color: var(--color-ink);
+    font-weight: 500;
+    color: var(--color-ink-mid);
     transition: background-color 120ms ease, border-color 120ms ease;
   }
 
   .btn-secondary:hover {
     background-color: var(--color-surface-muted);
     border-color: var(--color-line-strong);
+  }
+
+  /* -------------------------------------------------------------------------
+     On the photo
+
+     The landing hero is the one place in the app where type has no contrast
+     guarantee behind it: the Hive runs from near-white balustrades to deep
+     brown timber within the width of the nav, so cream that reads cleanly over
+     one frame disappears over the next. These put a dark edge under the mark
+     rather than a scrim over the photo - the shadow is warm ink at low alpha,
+     so it darkens the pixels immediately behind a glyph and nothing else.
+
+     Deliberately subtle. Enough for the edge to survive the brightest part of
+     the image, not enough to read as an effect: a hero that announces its drop
+     shadow dates the whole page.
+
+     Two layers, because one utility has to serve a 60px headline and a 13px
+     example chip. The tight layer is the edge that keeps small type legible
+     and is invisible under display sizes; the wide one grounds the headline
+     and is far too diffuse to muddy a 13px glyph. Sized in absolute pixels on
+     purpose - an em-relative shadow under the headline reads as a bevel.
+
+     Everything on the hero carries this except the search box, which is an
+     opaque panel with its own elevation and does not need lifting off
+     anything.
+  ------------------------------------------------------------------------- */
+  .on-photo-text {
+    text-shadow: 0 1px 2px rgb(32 30 29 / 0.36), 0 2px 8px rgb(32 30 29 / 0.22);
+  }
+
+  /* The same job for a silhouette rather than a glyph: the logo disc, the
+     avatar ring, the sign-in pill, the hairline example chips. A hairline in
+     cream disappears against a balustrade exactly the way the type does. */
+  .on-photo-shape {
+    box-shadow: 0 1px 5px rgb(32 30 29 / 0.28);
   }
 }
 
@@ -147,6 +254,19 @@
   body:has([data-app-shell]) .site-bar {
     max-width: none;
   }
+}
+
+/*
+ * The landing page closes itself off. Same `:has()` approach as the browse
+ * shell above, and for the same reason - the root layout renders the footer
+ * without knowing which route is above it.
+ *
+ * This page ends on a disclaimer of its own, aligned to its own wider
+ * container and carrying the on-campus sentence the site footer leaves out.
+ * The site footer under it would be most of the same paragraph twice.
+ */
+body:has([data-landing]) > footer {
+  display: none;
 }
 
 /*
@@ -295,7 +415,10 @@
 --------------------------------------------------------------------------- */
 .search-box {
   position: relative;
-  /* The outer two layers are pushed behind the form with a negative z-index,
+  /* All three layers below are 999px because the box is a pill in both places
+     it appears. If it ever stops being one they all have to move together: a
+     rectangle of light traced inside a rounded box is the failure mode.
+     The outer two layers are pushed behind the form with a negative z-index,
      and a stacking context here is what keeps "behind" meaning behind the form
      rather than behind whichever ancestor happens to be painting. */
   isolation: isolate;
@@ -327,11 +450,11 @@
      to it. */
   transition: opacity 420ms ease-out;
 
-  /* Built around the app's own two colours - the NTU red it uses for actions
-     and the teal it uses for on-campus - rather than a stock rainbow, so the
-     box still looks like it belongs to this page while it is lit. The first and
-     last stop are the same colour, which is what lets the band tile and travel
-     without a seam.
+  /* Built around the app's own two colours - the terracotta it uses for
+     actions and the teal it uses for on-campus - rather than a stock rainbow,
+     so the box still looks like it belongs to this page while it is lit. The
+     first and last stop are the same colour, which is what lets the band tile
+     and travel without a seam.
      `in oklch` is not decoration: interpolated in sRGB, the teal-to-red step
      runs in a straight line through the middle of the colour cube and comes out
      grey, which put a dead band across the widest part of the bar. Interpolated
@@ -339,13 +462,13 @@
      there to steer that last step through warm hues rather than green. */
   background-image: linear-gradient(
     90deg in oklch,
-    #b3202f,
+    #c67139,
     #e0559a,
     #8b5cf6,
     #3b9ff0,
     #14b8a6,
     #f0a23c,
-    #b3202f
+    #c67139
   );
   /* Two element-widths per tile, so one full cycle is a shift of exactly one
      tile and the loop is invisible. */
@@ -362,7 +485,7 @@
 .search-box::before {
   z-index: -2;
   inset: -12px;
-  border-radius: 26px;
+  border-radius: 999px;
   filter: blur(18px);
 }
 
@@ -372,7 +495,7 @@
 .search-box::after {
   z-index: -1;
   inset: -1.5px;
-  border-radius: 15.5px;
+  border-radius: 999px;
 }
 
 /* The inside face. Same travelling colour, masked to hug the edge and fall away
@@ -385,7 +508,7 @@
    edge above. */
 .search-box > form::before {
   inset: -1px;
-  border-radius: 14px;
+  border-radius: 999px;
   mask-image:
     linear-gradient(to bottom, #000, transparent 26%, transparent 74%, #000),
     linear-gradient(to right, #000, transparent 5%, transparent 95%, #000);
