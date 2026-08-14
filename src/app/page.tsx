@@ -5,15 +5,26 @@ import { ListingCard } from "@/components/listing-card";
 import { prisma } from "@/lib/prisma";
 import { LISTING_IMAGE_SELECT } from "@/lib/images";
 
+/**
+ * Pre-built searches for the band under the hero.
+ *
+ * Every one is a URL the results page already understands, so this is
+ * navigation rather than a feature: the point is that a seeker who does not
+ * know what to type still has somewhere to press.
+ */
+const STARTING_POINTS = [
+  { label: "On-campus halls", href: "/search?category=ON_CAMPUS" },
+  { label: "Off-campus rooms", href: "/search?category=OFF_CAMPUS" },
+  { label: "Under $600", href: "/search?max=600" },
+  { label: "$600 to $900", href: "/search?min=600&max=900" },
+  { label: "Single rooms", href: "/search?roomType=SINGLE" },
+  { label: "Shared rooms", href: "/search?roomType=SHARED" },
+  { label: "Whole units", href: "/search?roomType=WHOLE_UNIT" },
+];
+
 export default async function HomePage() {
-  const [total, onCampus, cheapest, recent] = await Promise.all([
+  const [total, recent] = await Promise.all([
     prisma.listing.count({ where: { status: "ACTIVE" } }),
-    prisma.listing.count({ where: { status: "ACTIVE", category: "ON_CAMPUS" } }),
-    prisma.listing.findFirst({
-      where: { status: "ACTIVE" },
-      orderBy: { price: "asc" },
-      select: { price: true },
-    }),
     prisma.listing.findMany({
       where: { status: "ACTIVE" },
       include: {
@@ -49,13 +60,30 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-3">
-        <Stat label="Rooms listed" value={String(total)} />
-        <Stat label="On-campus sublets" value={String(onCampus)} />
-        <Stat
-          label="Cheapest room"
-          value={cheapest ? `$${cheapest.price}` : "-"}
-        />
+      {/* This band used to hold three counters - rooms listed, on-campus
+          sublets, cheapest room. They described the inventory rather than
+          offering anything to do with it, and the headline number gets less
+          persuasive the longer a seeker looks at it. The count that is worth
+          stating is already in the hero pill; the band itself is better spent
+          on somewhere to go. */}
+      <section aria-labelledby="starting-points">
+        <h2
+          id="starting-points"
+          className="text-sm font-medium text-ink-soft"
+        >
+          Common starting points
+        </h2>
+        <div className="mt-2.5 flex flex-wrap gap-2">
+          {STARTING_POINTS.map((point) => (
+            <Link
+              key={point.href}
+              href={point.href}
+              className="rounded-full border border-line bg-surface px-3.5 py-2 text-[13px] text-ink-soft transition-colors hover:border-brand-line hover:bg-brand-soft hover:text-brand"
+            >
+              {point.label}
+            </Link>
+          ))}
+        </div>
       </section>
 
       <section className="mt-14">
@@ -98,17 +126,6 @@ export default async function HomePage() {
           Post a room
         </Link>
       </section>
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="card px-5 py-4">
-      <div className="text-2xl font-semibold tabular-nums tracking-tight text-ink">
-        {value}
-      </div>
-      <div className="mt-0.5 text-[13px] text-ink-soft">{label}</div>
     </div>
   );
 }
