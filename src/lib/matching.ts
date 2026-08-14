@@ -5,7 +5,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { chatJson, chatStream, extractJson } from "./openrouter";
 import { areaBounds, isInsideArea, type AreaPoint } from "./area-filter";
 import { embedText, toVectorLiteral } from "./embeddings";
-import { ALL_TAGS, TAG_LABELS } from "./constants";
+import { ALL_TAGS, OPPOSING_TAGS, TAG_LABELS } from "./constants";
 import { LISTING_IMAGE_SELECT, type ListingImageView } from "./images";
 import type {
   ListingCategory,
@@ -124,6 +124,7 @@ const intentSchema = z.object({
 
 function buildParseSystemPrompt(): string {
   const tagLines = ALL_TAGS.map((t) => `- ${t}: ${TAG_LABELS[t]}`).join("\n");
+  const opposites = OPPOSING_TAGS.map(([a, b]) => `${a}/${b}`).join(", ");
   return `You extract structured housing search filters from a student's natural-language request.
 
 Context: students looking for rooms near Nanyang Technological University (NTU) in west Singapore. Prices are monthly rent in SGD.
@@ -148,6 +149,7 @@ ${tagLines}
 Rules:
 - mustHaveTags: only things the seeker clearly requires. Be conservative - a wrong must-have removes good listings entirely. When in doubt put it in niceToHaveTags.
 - "don't mind sharing" or "ok with sharing" is NOT a requirement for SHARED. Leave roomType null.
+- These are opposites, so never return both of a pair anywhere: ${opposites}. Pick the one the seeker asked for and leave the other out entirely.
 - "near campus" / "close to NTU" is a commute preference, not a category. Only set category when the seeker explicitly means NTU hall/on-campus or explicitly means outside campus.
 - nuance: short phrase capturing preferences that are not tags, e.g. "quiet, studious, relaxed landlord". Empty string if none.
 - summary: one short sentence restating the request in plain English.
@@ -227,9 +229,9 @@ export async function parseSeekerQuery(query: string): Promise<SeekerIntent> {
       .map((t) => t.toUpperCase().trim())
       .filter((t): t is ListingTag => validTags.has(t));
 
-  const mustHaveTags = clean(parsed.mustHaveTags);
-  const niceToHaveTags = clean(parsed.niceToHaveTags).filter(
-    (t) => !mustHaveTags.includes(t),
+  const { mustHaveTags, niceToHaveTags } = demoteOpposites(
+    clean(parsed.mustHaveTags),
+    clean(parsed.niceToHaveTags),
   );
 
   const intent = groundIntent(
@@ -255,6 +257,39 @@ export async function parseSeekerQuery(query: string): Promise<SeekerIntent> {
   // would poison that query for the life of the process.
   rememberIntent(trimmed, intent);
   return intent;
+}
+
+/**
+ * Moves any pair of opposing tags out of the must-have list, and dedupes what
+ * is left against it.
+ *
+ * `hardFilter` requires every must-have at once, so QUIET plus SOCIAL matches
+ * nothing before the relaxation ladder is ever consulted - and unlike an
+ * over-eager single tag, no listing could ever satisfy the pair. The prompt
+ * already forbids it; this is what holds when the model does it anyway.
+ *
+ * Both members are demoted rather than one being chosen, because which one the
+ * seeker meant is precisely what just went wrong. As preferences they still
+ * reach the reranker, which reads `niceToHave` when it orders the shortlist and
+ * writes the reasons, so the vibe still counts - it just stops deleting rows.
+ */
+function demoteOpposites(
+  mustHave: ListingTag[],
+  niceToHave: ListingTag[],
+): { mustHaveTags: ListingTag[]; niceToHaveTags: ListingTag[] } {
+  const demoted = new Set<ListingTag>(
+    OPPOSING_TAGS.filter(
+      ([a, b]) => mustHave.includes(a) && mustHave.includes(b),
+    ).flat(),
+  );
+  const mustHaveTags = mustHave.filter((tag) => !demoted.has(tag));
+
+  return {
+    mustHaveTags,
+    niceToHaveTags: [...new Set([...niceToHave, ...demoted])].filter(
+      (tag) => !mustHaveTags.includes(tag),
+    ),
+  };
 }
 
 /**

@@ -120,10 +120,21 @@ export const TAG_LABELS: Record<ListingTag, string> = {
   OWNER_NOT_STAYING: "Owner not staying in",
   NEAR_BUS_STOP: "Near bus stop",
   NEAR_FOOD: "Near food & groceries",
+  SOCIAL: "Social",
+  ETHERNET_INCLUDED: "Ethernet included",
 };
 
 /**
- * Grouped for the provider form so 29 checkboxes do not read as a wall, and
+ * Pairs where ticking both says nothing about the room. Not enforced - a
+ * provider who ticks Quiet and Social has described a place with quiet hours
+ * and a busy common room, which is real - but they read as opposites, so they
+ * sit next to each other and the parser is told they are a pair rather than
+ * two unrelated amenities.
+ */
+export const OPPOSING_TAGS: [ListingTag, ListingTag][] = [["QUIET", "SOCIAL"]];
+
+/**
+ * Grouped for the provider form so 31 checkboxes do not read as a wall, and
  * reused unchanged by the seeker's filter panel - one vocabulary, one shape,
  * whichever side of the app you are on.
  *
@@ -149,6 +160,7 @@ export const TAG_GROUPS = [
     label: "Included",
     tags: [
       "WIFI_INCLUDED",
+      "ETHERNET_INCLUDED",
       "UTILITIES_INCLUDED",
       "CLEANING_INCLUDED",
       "NO_AGENT_FEE",
@@ -169,7 +181,14 @@ export const TAG_GROUPS = [
   },
   {
     label: "Vibe & location",
-    tags: ["QUIET", "NEAR_MRT", "NEAR_BUS_STOP", "NEAR_FOOD", "PET_FRIENDLY"],
+    tags: [
+      "QUIET",
+      "SOCIAL",
+      "NEAR_MRT",
+      "NEAR_BUS_STOP",
+      "NEAR_FOOD",
+      "PET_FRIENDLY",
+    ],
   },
   { label: "Lease", tags: ["SHORT_LEASE", "LONG_LEASE"] },
   { label: "Gender preference", tags: ["FEMALE_ONLY", "MALE_ONLY", "ANY_GENDER"] },

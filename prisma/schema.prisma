@@ -73,6 +73,8 @@ enum ListingTag {
   OWNER_NOT_STAYING
   NEAR_BUS_STOP
   NEAR_FOOD
+  SOCIAL
+  ETHERNET_INCLUDED
 }
 
 // ---------------------------------------------------------------------------
