@@ -12,6 +12,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
+    "db:sync": "tsx prisma/sync-listings.ts",
     "db:embed": "tsx prisma/backfill-embeddings.ts",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset"

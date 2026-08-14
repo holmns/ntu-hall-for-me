@@ -29,14 +29,18 @@ export const NTU_AREA_PLACES: NtuAreaPlace[] = [
 
   // --- Pioneer / Boon Lay ---
   { id: "blk-644-jw81", address: "Blk 644 Jurong West St 61, Singapore 640644", area: "Pioneer", lat: 1.3396, lng: 103.6969 },
+  { id: "blk-962-jw91", address: "Blk 962 Jurong West St 91, Singapore 640962", area: "Pioneer", lat: 1.3490, lng: 103.6935 },
   { id: "blk-651-jw61", address: "Blk 651 Jurong West St 61, Singapore 640651", area: "Pioneer", lat: 1.3383, lng: 103.6981 },
   { id: "blk-181-boonlay", address: "Blk 181 Boon Lay Dr, Singapore 640181", area: "Boon Lay", lat: 1.3459, lng: 103.7136 },
   { id: "blk-221-boonlay", address: "Blk 221 Boon Lay Pl, Singapore 640221", area: "Boon Lay", lat: 1.3466, lng: 103.7188 },
+  { id: "blk-267-boonlay", address: "Blk 267 Boon Lay Dr, Singapore 640267", area: "Boon Lay", lat: 1.3462, lng: 103.7107 },
   { id: "lakeside-tower", address: "Lakeside Tower, 51 Yuan Ching Rd, Singapore 618645", area: "Lakeside", lat: 1.3418, lng: 103.7212 },
+  { id: "parc-vista", address: "Parc Vista, 2 Boon Lay Ave, Singapore 649961", area: "Lakeside", lat: 1.3396, lng: 103.7181 },
 
   // --- Jurong West ---
   { id: "blk-419-jw42", address: "Blk 419 Jurong West St 42, Singapore 640419", area: "Jurong West", lat: 1.3492, lng: 103.7220 },
   { id: "blk-505-jw52", address: "Blk 505 Jurong West St 52, Singapore 640505", area: "Jurong West", lat: 1.3502, lng: 103.7186 },
+  { id: "blk-517-jw52", address: "Blk 517 Jurong West St 52, Singapore 640517", area: "Jurong West", lat: 1.3509, lng: 103.7203 },
   { id: "blk-960-jw81", address: "Blk 960 Jurong West St 81, Singapore 640960", area: "Jurong West", lat: 1.3489, lng: 103.6982 },
   { id: "the-centris", address: "The Centris, 20 Jurong West Central 3, Singapore 648331", area: "Jurong West", lat: 1.3399, lng: 103.7060 },
   { id: "lakeholmz", address: "Lakeholmz, 41 Corporation Rd, Singapore 649822", area: "Jurong West", lat: 1.3378, lng: 103.7145 },
@@ -49,4 +53,7 @@ export const NTU_AREA_PLACES: NtuAreaPlace[] = [
   // --- Bukit Batok / Chinese Garden (still commutable) ---
   { id: "blk-155-bb", address: "Blk 155 Bukit Batok St 11, Singapore 650155", area: "Bukit Batok", lat: 1.3494, lng: 103.7452 },
   { id: "chinese-garden-rd", address: "Blk 132 Yuan Ching Rd, Singapore 618678", area: "Chinese Garden", lat: 1.3396, lng: 103.7268 },
+
+  // --- Jurong East (the far end of what anyone would call commutable) ---
+  { id: "westmere", address: "Westmere, 20 Jurong East St 13, Singapore 609641", area: "Jurong East", lat: 1.3361, lng: 103.7371 },
 ];
