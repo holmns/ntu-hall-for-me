@@ -49,20 +49,26 @@ export function CommuteBadge({
 }
 
 /**
- * Cover thumbnail, or a neutral placeholder so a listing without photos still
- * lines up with the ones that have them.
+ * Cover photo, or a neutral placeholder so a listing without one still lines
+ * up with the listings that have them. The caller owns the box: a row card
+ * wants a fixed rounded panel beside the text, a stacked card wants the photo
+ * running full-bleed to the card's own edges.
  */
-function CardCover({ listing }: { listing: ListingWithProvider }) {
+function CardCover({
+  listing,
+  box,
+}: {
+  listing: ListingWithProvider;
+  box: string;
+}) {
   const cover = listing.images[0];
-  const box =
-    "h-[72px] w-24 shrink-0 overflow-hidden rounded-lg border border-line sm:h-24 sm:w-32";
 
   if (!cover) {
     return (
       <div className={`${box} grid place-items-center bg-surface-muted`}>
         <svg
           viewBox="0 0 24 24"
-          className="h-6 w-6 text-line-strong"
+          className="h-7 w-7 text-line-strong"
           fill="none"
           stroke="currentColor"
           strokeWidth="1.5"
@@ -121,6 +127,7 @@ export function ListingCard({
   mode = "transit",
   save,
   unavailable = false,
+  layout = "row",
 }: {
   listing: ListingWithProvider;
   /** Already wrapped in `ReasonPill` by the caller, or absent. */
@@ -131,14 +138,77 @@ export function ListingCard({
   save?: ReactNode;
   /** Withdrawn since it was saved. Only `/saved` ever renders one of these. */
   unavailable?: boolean;
+  /**
+   * `row` is the browse list: photo beside the text, so a tall column shows
+   * several rooms at once. `stacked` puts the photo on top at full bleed, for
+   * the wide grids where there is room to lead with it.
+   */
+  layout?: "row" | "stacked";
 }) {
   const tags = listing.tags as ListingTag[];
+  const stacked = layout === "stacked";
+
+  const body = (
+    <div className="min-w-0 flex-1">
+      <div className="flex items-start justify-between gap-4">
+        <h3 className="text-[15px] font-semibold leading-snug text-ink group-hover:text-brand">
+          {listing.title}
+          {unavailable && (
+            <span className="ml-2 whitespace-nowrap rounded-full bg-surface-muted px-2 py-0.5 align-middle text-[11px] font-medium text-ink-faint">
+              No longer listed
+            </span>
+          )}
+        </h3>
+        <div className="shrink-0 text-right">
+          <div className="text-[15px] font-semibold tabular-nums text-ink">
+            ${listing.price.toLocaleString()}
+          </div>
+          <div className="text-[11px] text-ink-faint">per month</div>
+        </div>
+      </div>
+
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-soft">
+        <span>{ROOM_TYPE_LABELS[listing.roomType]}</span>
+        <span className="text-line-strong">/</span>
+        <span>{CATEGORY_LABELS[listing.category]}</span>
+        <span className="text-line-strong">/</span>
+        <CommuteBadge listing={listing} mode={mode} />
+      </div>
+
+      {reason}
+
+      {tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {tags.slice(0, 5).map((tag) => (
+            <TagPill key={tag} tag={tag} />
+          ))}
+          {tags.length > 5 && (
+            <span className="self-center text-xs text-ink-faint">
+              +{tags.length - 5} more
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  const rankChip = rank != null && (
+    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-soft text-xs font-semibold text-brand tabular-nums">
+      {rank}
+    </span>
+  );
 
   return (
     // Not a <Link> wrapper: the save button is interactive and cannot be
     // nested inside an anchor, so the link is stretched over the card instead
     // and the button sits above it.
-    <article className="card group relative p-4 transition-all hover:border-line-strong hover:shadow-[0_2px_12px_rgba(28,26,23,0.06)] sm:p-5">
+    <article
+      className={`card group relative transition-all hover:border-line-strong hover:shadow-[0_2px_12px_rgba(28,26,23,0.06)] ${
+        // Stacked runs the photo to the card's own edges, which needs the
+        // rounding clipped and the padding moved onto the text block.
+        stacked ? "overflow-hidden" : "p-4 sm:p-5"
+      }`}
+    >
       <Link
         href={`/listings/${listing.id}`}
         className="absolute inset-0 rounded-card"
@@ -146,58 +216,31 @@ export function ListingCard({
         <span className="sr-only">{listing.title}</span>
       </Link>
 
-      <div className="flex items-start gap-3">
-        {rank != null && (
-          <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-soft text-xs font-semibold text-brand tabular-nums">
-            {rank}
-          </span>
-        )}
-        <div className="relative shrink-0">
-          <CardCover listing={listing} />
-          {save && <div className="absolute right-1 top-1 z-10">{save}</div>}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-4">
-            <h3 className="text-[15px] font-semibold leading-snug text-ink group-hover:text-brand">
-              {listing.title}
-              {unavailable && (
-                <span className="ml-2 whitespace-nowrap rounded-full bg-surface-muted px-2 py-0.5 align-middle text-[11px] font-medium text-ink-faint">
-                  No longer listed
-                </span>
-              )}
-            </h3>
-            <div className="shrink-0 text-right">
-              <div className="text-[15px] font-semibold tabular-nums text-ink">
-                ${listing.price.toLocaleString()}
-              </div>
-              <div className="text-[11px] text-ink-faint">per month</div>
-            </div>
+      {stacked ? (
+        <>
+          <div className="relative">
+            <CardCover
+              listing={listing}
+              box="aspect-[3/2] w-full overflow-hidden border-b border-line"
+            />
+            {save && <div className="absolute right-2 top-2 z-10">{save}</div>}
+            {rankChip && <div className="absolute left-2 top-2 z-10">{rankChip}</div>}
           </div>
-
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-soft">
-            <span>{ROOM_TYPE_LABELS[listing.roomType]}</span>
-            <span className="text-line-strong">/</span>
-            <span>{CATEGORY_LABELS[listing.category]}</span>
-            <span className="text-line-strong">/</span>
-            <CommuteBadge listing={listing} mode={mode} />
+          <div className="p-4">{body}</div>
+        </>
+      ) : (
+        <div className="flex items-start gap-3 sm:gap-4">
+          {rankChip && <div className="mt-0.5">{rankChip}</div>}
+          <div className="relative shrink-0">
+            <CardCover
+              listing={listing}
+              box="h-[104px] w-[136px] shrink-0 overflow-hidden rounded-lg border border-line sm:h-[150px] sm:w-[200px]"
+            />
+            {save && <div className="absolute right-1 top-1 z-10">{save}</div>}
           </div>
-
-          {reason}
-
-          {tags.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {tags.slice(0, 5).map((tag) => (
-                <TagPill key={tag} tag={tag} />
-              ))}
-              {tags.length > 5 && (
-                <span className="self-center text-xs text-ink-faint">
-                  +{tags.length - 5} more
-                </span>
-              )}
-            </div>
-          )}
+          {body}
         </div>
-      </div>
+      )}
     </article>
   );
 }
