@@ -19,6 +19,25 @@ export function TagPill({ tag }: { tag: ListingTag }) {
   );
 }
 
+/**
+ * One item in a card's meta row, carrying the separator that precedes it.
+ *
+ * A slash rendered as its own flex child is its own wrap opportunity, so
+ * whenever the item after it dropped to the next line the slash stayed behind
+ * and the row read "Single room / On-campus sublet /" with nothing after it.
+ * Bound to the item it introduces, the separator travels with it.
+ */
+function MetaItem({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-2.5">
+      <span aria-hidden="true" className="text-line-strong">
+        /
+      </span>
+      {children}
+    </span>
+  );
+}
+
 export function CommuteBadge({
   listing,
   mode,
@@ -167,12 +186,12 @@ export function ListingCard({
         </div>
       </div>
 
-      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-soft">
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-ink-soft">
         <span>{ROOM_TYPE_LABELS[listing.roomType]}</span>
-        <span className="text-line-strong">/</span>
-        <span>{CATEGORY_LABELS[listing.category]}</span>
-        <span className="text-line-strong">/</span>
-        <CommuteBadge listing={listing} mode={mode} />
+        <MetaItem>{CATEGORY_LABELS[listing.category]}</MetaItem>
+        <MetaItem>
+          <CommuteBadge listing={listing} mode={mode} />
+        </MetaItem>
       </div>
 
       {reason}
