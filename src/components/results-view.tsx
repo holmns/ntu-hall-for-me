@@ -6,6 +6,8 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
+  useOptimistic,
   useRef,
   useState,
   useTransition,
@@ -14,6 +16,37 @@ import {
 
 import { ResultsMap, type MapPin } from "./results-map";
 import { decodeArea, encodeArea, type AreaPoint } from "@/lib/area-filter";
+import type { SortOrder } from "@/lib/matching";
+
+/** The two fields any offered ordering needs, for every room on the page. */
+export type SortKey = { id: string; price: number; createdAt: number };
+
+/**
+ * Must match `SORT_SQL` in matching.ts, including the tiebreak, or the order
+ * the reader sees would change under them the moment the server answers.
+ */
+const COMPARATORS: Record<SortOrder, (a: SortKey, b: SortKey) => number> = {
+  price_asc: (a, b) => a.price - b.price || b.createdAt - a.createdAt,
+  price_desc: (a, b) => b.price - a.price || b.createdAt - a.createdAt,
+  newest: (a, b) => b.createdAt - a.createdAt,
+};
+
+type SortApi = {
+  sort: SortOrder | null;
+  choose: (next: SortOrder | null) => void;
+  pending: boolean;
+};
+
+const SortContext = createContext<SortApi | null>(null);
+/** For the sort control, which renders inside this component's children. */
+export function useSortControl(): SortApi {
+  const ctx = useContext(SortContext);
+  if (!ctx) throw new Error("SortSelect must be rendered inside ResultsView");
+  return ctx;
+}
+
+/** id -> CSS `order`, or null while the DOM order is already correct. */
+const OrderContext = createContext<Map<string, number> | null>(null);
 
 /**
  * Which room is currently "live" across the browse page, and what caused it.
@@ -56,9 +89,15 @@ function useSelection(): SelectionApi {
  */
 export function ResultsView({
   pins,
+  sortKeys,
+  serverSort,
   children,
 }: {
   pins: MapPin[];
+  /** Every room on the page, in the order the server rendered them. */
+  sortKeys: SortKey[];
+  /** The ordering the server actually used, from the URL. */
+  serverSort: SortOrder | null;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -67,6 +106,49 @@ export function ResultsView({
   const [mapOpen, setMapOpen] = useState(true);
   const [pending, startTransition] = useTransition();
   const [draft, setDraft] = useState<AreaPoint[] | null>(null);
+
+  // Ordering is the one thing on this page the browser can answer by itself:
+  // every room is already in the DOM with its price and date, so reordering is
+  // presentation, not a query. Shown optimistically so a click repaints on the
+  // spot instead of waiting on a round trip that re-renders the map and
+  // re-streams the reasons only to return the same rooms in a new order.
+  //
+  // `serverSort` is still what the order means - React drops the optimistic
+  // value once the navigation commits, by which point the URL agrees, and puts
+  // it back if the navigation never lands.
+  const [sort, showSort] = useOptimistic(serverSort);
+  const [sortPending, startSortTransition] = useTransition();
+
+  const chooseSort = useCallback(
+    (next: SortOrder | null) => {
+      // The URL is sent anyway, for the two things only the server can do:
+      // make the order shareable and survive a reload, and move the match
+      // reasons onto the ten rooms that are now on top. Nothing on screen
+      // waits for it.
+      const params = new URLSearchParams(searchParams.toString());
+      if (next) params.set("sort", next);
+      else params.delete("sort");
+      const query = params.toString();
+
+      startSortTransition(() => {
+        showSort(next);
+        router.push(query ? `/search?${query}` : "/search");
+      });
+    },
+    [router, searchParams, showSort],
+  );
+
+  // Null under "best match": the server already emitted that order, so leaving
+  // `order` unset keeps the cards in document order and costs no styles.
+  const sortKeyIds = sortKeys.map((k) => k.id).join(",");
+  const orderById = useMemo(() => {
+    if (!sort) return null;
+    const ranked = [...sortKeys].sort(COMPARATORS[sort]);
+    return new Map(ranked.map((key, index) => [key.id, index]));
+    // sortKeyIds is the stable identity of sortKeys, which is a fresh array on
+    // every render of the server payload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sort, sortKeyIds]);
 
   const areaParam = searchParams.get("area");
   // While the search is in flight, show the shape the seeker just drew rather
@@ -117,7 +199,14 @@ export function ResultsView({
     [router, searchParams],
   );
 
+  const sortApi = useMemo(
+    () => ({ sort, choose: chooseSort, pending: sortPending }),
+    [sort, chooseSort, sortPending],
+  );
+
   return (
+    <SortContext.Provider value={sortApi}>
+    <OrderContext.Provider value={orderById}>
     <SelectionContext.Provider value={{ selection, select, clear }}>
       {/* Map first in the source and on the left at desktop widths, the way a
           rental search reads: the map is the browsing surface and the list is
@@ -170,8 +259,13 @@ export function ResultsView({
             (overflow-y-auto makes the x-axis overflow auto too, and a ring
             with zero left inset gets cut). Dimmed rather than replaced while
             a new search runs, so the page never goes blank under the reader. */}
+        {/* `data-sorted` hides the rank chips: they number the model's order,
+            and the reader is looking at a different one. Deliberately not
+            keyed on `sortPending` - the dimming below is for a search whose
+            results are about to change, and a sort's are not. */}
         <div
           aria-busy={pending}
+          data-sorted={sort ? "" : undefined}
           className={`min-w-0 transition-opacity lg:h-full lg:overflow-y-auto lg:pl-1 lg:pr-1 ${
             pending ? "pointer-events-none opacity-45" : ""
           }`}
@@ -184,6 +278,8 @@ export function ResultsView({
         </div>
       </div>
     </SelectionContext.Provider>
+    </OrderContext.Provider>
+    </SortContext.Provider>
   );
 }
 
@@ -200,6 +296,10 @@ export function SelectableCard({
   children: ReactNode;
 }) {
   const { selection, select, clear } = useSelection();
+  // The card inside stays a server component; only its position changes, and
+  // `order` on a grid item moves it without re-rendering or remounting
+  // anything - which is what keeps the streamed reason boundaries intact.
+  const order = useContext(OrderContext)?.get(id);
   const ref = useRef<HTMLDivElement>(null);
   const selected = selection?.id === id;
   const fromMap = selected && selection?.source === "map";
@@ -212,6 +312,7 @@ export function SelectableCard({
   return (
     <div
       ref={ref}
+      style={order != null ? { order } : undefined}
       onMouseEnter={() => select(id, "list")}
       onMouseLeave={() => clear(id)}
       onFocus={() => select(id, "list")}

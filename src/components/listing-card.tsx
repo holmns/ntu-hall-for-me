@@ -261,7 +261,13 @@ export function ListingCard({
   // line, where the chip and its gap cost 40px of a text column that had 129px
   // to give at the lg breakpoint.
   const rankChip = rank != null && (
-    <span className="grid h-6 w-6 place-items-center rounded-full bg-brand-soft text-xs font-semibold text-brand tabular-nums shadow-[0_1px_3px_rgba(28,26,23,0.14)]">
+    // `data-rank` is what globals.css hides on while the reader is holding a
+    // client-side sort: these numbers describe the model's order, and under
+    // any other order they are a position claiming to be a judgement.
+    <span
+      data-rank
+      className="grid h-6 w-6 place-items-center rounded-full bg-brand-soft text-xs font-semibold text-brand tabular-nums shadow-[0_1px_3px_rgba(28,26,23,0.14)]"
+    >
       {rank}
     </span>
   );

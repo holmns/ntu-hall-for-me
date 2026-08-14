@@ -150,6 +150,18 @@
 }
 
 /*
+ * Rank chips number the model's ordering. The moment the reader picks price or
+ * date instead, they are positions in an order nothing judged - so they go.
+ *
+ * Done in CSS because the reorder itself is: the cards are server components
+ * streaming their match reasons into Suspense boundaries, and re-rendering
+ * them to drop a badge would throw that away for a decoration.
+ */
+[data-sorted] [data-rank] {
+  display: none;
+}
+
+/*
  * A page with a pinned bottom action bar has to keep the site footer out from
  * under it. A spacer inside the page cannot do this: the footer is rendered by
  * the root layout, after and outside the page's own container, so it scrolls

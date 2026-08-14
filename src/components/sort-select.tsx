@@ -1,8 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useTransition } from "react";
-
+import { useSortControl } from "@/components/results-view";
 import type { SortOrder } from "@/lib/matching";
 
 /**
@@ -14,7 +12,6 @@ import type { SortOrder } from "@/lib/matching";
  * because four options are cheaper to read than to open.
  */
 export function SortSelect({
-  sort,
   /**
    * Whether the seeker typed anything. Without a query there is no ranking to
    * be best at - the pipeline skips the parse, the embedding and the reasons,
@@ -23,12 +20,11 @@ export function SortSelect({
    */
   hasQuery,
 }: {
-  sort: SortOrder | null;
   hasQuery: boolean;
 }) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [pending, startTransition] = useTransition();
+  // The order lives in ResultsView, which is what holds every room's price and
+  // date and can therefore reorder the page without asking the server.
+  const { sort, choose } = useSortControl();
 
   // The unset state is always the first pill; only its name changes. With no
   // query the pipeline already orders by date, so unset *is* newest - saying
@@ -49,25 +45,10 @@ export function SortSelect({
 
   const current = sort ?? "";
 
-  function choose(value: SortOrder | "") {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value) params.set("sort", value);
-    else params.delete("sort");
-
-    // In a transition so React holds the current map and results on screen
-    // while the new ones load, exactly as the drawn boundary does.
-    startTransition(() => {
-      const query = params.toString();
-      router.push(query ? `/search?${query}` : "/search");
-    });
-  }
-
   return (
-    <div
-      className={`flex flex-wrap items-center gap-1.5 transition-opacity ${
-        pending ? "opacity-60" : ""
-      }`}
-    >
+    // No pending state: the reorder is instant, so dimming the control would
+    // be inventing a wait that is not happening.
+    <div className="flex flex-wrap items-center gap-1.5">
       <span className="text-xs text-ink-faint">Sort</span>
       {options.map((option) => {
         const active = current === option.value;
@@ -76,7 +57,7 @@ export function SortSelect({
             key={option.value || "best"}
             type="button"
             aria-pressed={active}
-            onClick={() => choose(option.value)}
+            onClick={() => choose(option.value || null)}
             className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
               active
                 ? "border-brand bg-brand-soft font-medium text-brand"

@@ -272,9 +272,7 @@ async function Results({
           {query.trim() && !chips.sort ? " for you" : ""}
           {chips.area ? " in the area you drew" : ""}
         </h2>
-        {listings.length > 0 && (
-          <SortSelect sort={chips.sort ?? null} hasQuery={Boolean(query.trim())} />
-        )}
+        {listings.length > 0 && <SortSelect hasQuery={Boolean(query.trim())} />}
       </div>
     </>
   );
@@ -289,7 +287,19 @@ async function Results({
           that has actually waited for `searchListings`. */}
       <SearchSettled />
 
-      <ResultsView pins={listings.map((l) => toMapPin(l, mode))}>
+      {/* The sort keys are what let the browser reorder without asking again:
+          every room on the page, with the two fields any offered ordering
+          needs. Tiny beside the cards themselves, and it means a sort click
+          repaints instead of re-running the pipeline. */}
+      <ResultsView
+        pins={listings.map((l) => toMapPin(l, mode))}
+        sortKeys={listings.map((l) => ({
+          id: l.id,
+          price: l.price,
+          createdAt: l.createdAt.getTime(),
+        }))}
+        serverSort={chips.sort ?? null}
+      >
         {summary}
 
         {/* Rendered inside ResultsView rather than instead of it: a search
