@@ -531,6 +531,86 @@ const reasonsSchema = z.object({
   ),
 });
 
+type ReasonEntry = { id: string; reason: string };
+
+/**
+ * Pulls every COMPLETE entry out of a "reasons" array that may be cut off.
+ *
+ * A response truncated by `max_tokens` is still valid JSON up to the point it
+ * stopped, so it carries most of its explanations - only the entry that lost
+ * its closing brace is unusable. Parsing the whole buffer or nothing throws all
+ * of them away and puts an error notice on a page whose ranking is fine, which
+ * is a far worse outcome for the reader than one card missing its line.
+ *
+ * Scans rather than regexes because a reason is free text and may itself
+ * contain braces or escaped quotes.
+ */
+function salvageReasons(buffer: string): ReasonEntry[] {
+  const key = buffer.indexOf('"reasons"');
+  if (key === -1) return [];
+  const open = buffer.indexOf("[", key);
+  if (open === -1) return [];
+
+  const entries: ReasonEntry[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = open + 1; i < buffer.length; i++) {
+    const ch = buffer[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (inString) {
+      if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        try {
+          const entry = reasonsSchema.shape.reasons.element.safeParse(
+            JSON.parse(buffer.slice(start, i + 1)),
+          );
+          if (entry.success) entries.push(entry.data);
+        } catch {
+          // Braces balanced but not valid JSON - skip this entry, keep going.
+        }
+        start = -1;
+      }
+    } else if (ch === "]" && depth === 0) {
+      break;
+    }
+  }
+  return entries;
+}
+
+/**
+ * The whole buffer when it parsed, the complete entries when it did not.
+ * Throws only when nothing at all came back, which is the one case where the
+ * page's "reasons unavailable" notice is the honest thing to show.
+ */
+function parseReasons(buffer: string): ReasonEntry[] {
+  try {
+    return reasonsSchema.parse(extractJson<unknown>(buffer)).reasons;
+  } catch (error) {
+    const salvaged = salvageReasons(buffer);
+    if (salvaged.length === 0) throw error;
+    console.warn(
+      `[matching] reasons response was incomplete (${buffer.length} chars); kept ${salvaged.length}`,
+    );
+    return salvaged;
+  }
+}
+
 const REASON_SYSTEM_PROMPT = `You rank and explain room listings for a student looking for housing near NTU Singapore.
 
 You get the seeker's request and a shortlist that already passed the hard filters (budget, tags, category) and was pre-sorted by how closely each description matches the request. Semantic similarity alone cannot weigh price against commute, so that judgement is yours.
@@ -539,6 +619,8 @@ Return ONLY JSON, with "order" FIRST:
 {"order": ["<id best first>", ...], "reasons": [{"id": "<listing id>", "reason": "<max 18 words>"}]}
 
 Emitting "order" before "reasons" is required, not stylistic: the page renders as soon as the order arrives and fills the explanations in afterwards.
+
+Emit compact JSON on a single line: no line breaks, no indentation, no space after ":" or ",". Nobody reads this JSON, and every whitespace token is one the seeker waits for.
 
 Rules:
 - "order" must contain EVERY id you were given, exactly once, best fit first.
@@ -634,8 +716,13 @@ export function rerankAndExplain(
           niceToHave: intent.niceToHaveTags,
           listings: candidatePayload(shortlist, intent),
         }),
-        // The order array plus REASON_LIMIT entries at ~45 tokens each.
-        maxTokens: 1000,
+        // Measured, not estimated: a full REASON_LIMIT shortlist runs 800-860
+        // completion tokens pretty-printed and ~700 compact. The old 1000 left
+        // barely 15% headroom, so an ordinary long-winded run hit the cap, got
+        // cut mid-object and lost every reason. max_tokens is a ceiling and
+        // only generated tokens are billed, so the headroom is free; it is here
+        // to stop a runaway, not to trim a normal response.
+        maxTokens: 1800,
       })) {
         buffer += delta;
 
@@ -667,9 +754,8 @@ export function rerankAndExplain(
     // A stream that ended without a usable order leaves the vector order.
     if (!orderSettled) resolveOrder(ids);
 
-    const parsed = reasonsSchema.parse(extractJson<unknown>(buffer));
     const map: ReasonMap = new Map();
-    for (const entry of parsed.reasons) {
+    for (const entry of parseReasons(buffer)) {
       const reason = entry.reason.trim();
       // Ignore ids the model invented or repeated. A listing the model skips
       // renders without a reason, which the card already handles.

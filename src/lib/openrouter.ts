@@ -104,6 +104,37 @@ export async function* chatStream({
     const decoder = new TextDecoder();
     let buffer = "";
 
+    /** Returns true when the frame was the terminator. */
+    function* emit(line: string): Generator<string, boolean> {
+      const trimmed = line.trim();
+      // OpenRouter sends ": OPENROUTER PROCESSING" keepalive comments.
+      if (!trimmed || trimmed.startsWith(":")) return false;
+      if (!trimmed.startsWith("data:")) return false;
+      const payload = trimmed.slice("data:".length).trim();
+      if (payload === "[DONE]") return true;
+      let chunk: {
+        error?: { message?: string; code?: number };
+        choices?: { delta?: { content?: string } }[];
+      };
+      try {
+        chunk = JSON.parse(payload);
+      } catch {
+        // A frame split across reads is retried on the next pass.
+        return false;
+      }
+      // A provider can fail mid-stream and say so in a frame. Without this the
+      // stream just stops and the caller reports whatever half-written JSON it
+      // had accumulated, which names the wrong culprit.
+      if (chunk.error) {
+        throw new OpenRouterError(
+          `OpenRouter stream error: ${chunk.error.message ?? "unknown"}`,
+        );
+      }
+      const delta = chunk.choices?.[0]?.delta?.content;
+      if (delta) yield delta;
+      return false;
+    }
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -114,23 +145,15 @@ export async function* chatStream({
       buffer = lines.pop() ?? "";
 
       for (const line of lines) {
-        const trimmed = line.trim();
-        // OpenRouter sends ": OPENROUTER PROCESSING" keepalive comments.
-        if (!trimmed || trimmed.startsWith(":")) continue;
-        if (!trimmed.startsWith("data:")) continue;
-        const payload = trimmed.slice("data:".length).trim();
-        if (payload === "[DONE]") return;
-        try {
-          const chunk = JSON.parse(payload) as {
-            choices?: { delta?: { content?: string } }[];
-          };
-          const delta = chunk.choices?.[0]?.delta?.content;
-          if (delta) yield delta;
-        } catch {
-          // A frame split across reads is retried on the next pass.
-        }
+        if (yield* emit(line)) return;
       }
     }
+
+    // A final frame with no trailing newline is still a whole frame. Dropping
+    // it truncates the JSON the caller is accumulating, which surfaces far away
+    // as an unparseable response rather than as a stream that ended early.
+    buffer += decoder.decode();
+    if (buffer.trim()) yield* emit(buffer);
   } finally {
     clearTimeout(timer);
   }
