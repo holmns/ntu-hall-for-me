@@ -288,13 +288,32 @@ export function SearchBar({
         </div>
       </ViewTransition>
 
+      {/* The phone-width trigger. Below sm there is no room for it inside the
+          box, so it stands on its own - which is exactly why it cannot be bare
+          text: on its own above the map it read as a caption for the search
+          field rather than as something to press. Built to match the Hide map
+          button it sits next to, so the two read as the pair of controls they
+          are. */}
       <button
         type="button"
         onClick={() => setFiltersOpen((o) => !o)}
-        className="mt-2 text-[13px] text-ink-soft underline-offset-2 hover:underline sm:hidden"
+        aria-expanded={filtersOpen}
+        className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 py-1.5 text-[13px] font-medium text-ink transition-colors hover:bg-surface-muted sm:hidden"
       >
-        {filtersOpen ? "Hide filters" : "Filters"}
-        {activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+        <svg
+          viewBox="0 0 16 16"
+          className="h-3.5 w-3.5 text-ink-faint"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d="M2 3.2A.7.7 0 0 1 2.7 2.5h10.6a.7.7 0 0 1 .53 1.16L9.8 8.4v4.1a.7.7 0 0 1-1.02.62l-2.1-1.07a.7.7 0 0 1-.38-.62V8.4L2.17 3.66A.7.7 0 0 1 2 3.2Z" />
+        </svg>
+        Filters
+        {activeFilterCount > 0 && (
+          <span className="grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[10px] font-semibold text-white tabular-nums">
+            {activeFilterCount}
+          </span>
+        )}
       </button>
 
       {filtersOpen && (
