@@ -82,6 +82,14 @@ export const NTU_CAMPUS_OUTLINE: { lat: number; lng: number }[] = [
   { lat: 1.35583, lng: 103.68485 },
 ];
 
+/**
+ * The label is the tag's only definition in prose: it is what the provider
+ * ticks, what the seeker's filter chip says, the description handed to the
+ * parser prompt, and the word that lands in the listing's embedding text. So
+ * it has to read as a claim a provider can honestly make about a room - "Owner
+ * not staying in", not "Owner absent" - and it has to survive being read on
+ * its own, without the group heading above it.
+ */
 export const TAG_LABELS: Record<ListingTag, string> = {
   AIRCON: "Aircon",
   ENSUITE: "Ensuite bathroom",
@@ -100,24 +108,97 @@ export const TAG_LABELS: Record<ListingTag, string> = {
   FEMALE_ONLY: "Female only",
   MALE_ONLY: "Male only",
   ANY_GENDER: "Any gender",
+  WATER_HEATER: "Water heater",
+  BALCONY: "Balcony",
+  GYM_ACCESS: "Gym access",
+  POOL_ACCESS: "Pool access",
+  PARKING: "Parking available",
+  CLEANING_INCLUDED: "Cleaning included",
+  NO_SMOKING: "Non-smoking",
+  HALAL_KITCHEN: "Halal kitchen",
+  VISITORS_ALLOWED: "Visitors allowed",
+  OWNER_NOT_STAYING: "Owner not staying in",
+  NEAR_BUS_STOP: "Near bus stop",
+  NEAR_FOOD: "Near food & groceries",
 };
 
-/** Grouped for the provider form so 17 checkboxes do not read as a wall. */
-export const TAG_GROUPS: { label: string; tags: ListingTag[] }[] = [
+/**
+ * Grouped for the provider form so 29 checkboxes do not read as a wall, and
+ * reused unchanged by the seeker's filter panel - one vocabulary, one shape,
+ * whichever side of the app you are on.
+ *
+ * This is the display order; the enum's order is append-only and means nothing
+ * here. Every tag must appear in exactly one group or it becomes unreachable
+ * from both forms while still being a valid value the parser can return.
+ */
+export const TAG_GROUPS = [
   {
     label: "Room",
-    tags: ["AIRCON", "ENSUITE", "FURNISHED", "STUDY_DESK", "WASHING_MACHINE"],
+    tags: [
+      "AIRCON",
+      "ENSUITE",
+      "FURNISHED",
+      "STUDY_DESK",
+      "WASHING_MACHINE",
+      "WATER_HEATER",
+      "BALCONY",
+    ],
   },
+  { label: "Facilities", tags: ["GYM_ACCESS", "POOL_ACCESS", "PARKING"] },
   {
     label: "Included",
-    tags: ["WIFI_INCLUDED", "UTILITIES_INCLUDED", "COOKING_ALLOWED", "NO_AGENT_FEE"],
+    tags: [
+      "WIFI_INCLUDED",
+      "UTILITIES_INCLUDED",
+      "CLEANING_INCLUDED",
+      "NO_AGENT_FEE",
+    ],
   },
-  { label: "Vibe & location", tags: ["QUIET", "NEAR_MRT", "PET_FRIENDLY"] },
+  // Cooking sits here rather than under "Included": it is a permission the
+  // household grants, which is the same question as smoking and visitors, and
+  // it would read oddly two groups away from the halal kitchen it implies.
+  {
+    label: "House rules",
+    tags: [
+      "COOKING_ALLOWED",
+      "HALAL_KITCHEN",
+      "NO_SMOKING",
+      "VISITORS_ALLOWED",
+      "OWNER_NOT_STAYING",
+    ],
+  },
+  {
+    label: "Vibe & location",
+    tags: ["QUIET", "NEAR_MRT", "NEAR_BUS_STOP", "NEAR_FOOD", "PET_FRIENDLY"],
+  },
   { label: "Lease", tags: ["SHORT_LEASE", "LONG_LEASE"] },
   { label: "Gender preference", tags: ["FEMALE_ONLY", "MALE_ONLY", "ANY_GENDER"] },
-];
+  // `as const` is what makes the coverage check below possible: annotated as
+  // `ListingTag[]` the tags widen to the whole enum and the check passes for
+  // any list at all. `satisfies` keeps the typo protection that annotation gave.
+] as const satisfies readonly { label: string; tags: readonly ListingTag[] }[];
 
-export const ALL_TAGS = Object.keys(TAG_LABELS) as ListingTag[];
+/** Tags that exist in the enum but sit in no group, so no form can show them. */
+type UngroupedTag = Exclude<
+  ListingTag,
+  (typeof TAG_GROUPS)[number]["tags"][number]
+>;
+
+/**
+ * The whole vocabulary, and the guard that keeps it honest.
+ *
+ * `TAG_LABELS` is a `Record<ListingTag, string>`, so a tag added to the enum
+ * and forgotten here is a type error. Forgetting `TAG_GROUPS` was not: the tag
+ * stayed a legal value that the parser prompt lists and can return as a
+ * must-have, while being untickable on the post form and unfilterable on
+ * search - a query mentioning it would quietly match nothing. The conditional
+ * below turns that into a compile error naming the missing tag.
+ */
+export const ALL_TAGS: [UngroupedTag] extends [never]
+  ? ListingTag[]
+  : ["tag missing from TAG_GROUPS:", UngroupedTag] = Object.keys(
+  TAG_LABELS,
+) as ListingTag[];
 
 export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   SINGLE: "Single room",

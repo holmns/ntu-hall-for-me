@@ -38,6 +38,11 @@ enum ListingStatus {
 
 /// Fixed tag vocabulary. Providers pick from these checkboxes; the seeker query
 /// parser is also constrained to this list so hard filtering stays exact-match.
+///
+/// New values are appended, never slotted in: Postgres fixes an enum's order at
+/// creation and reordering it means rewriting the type. Nothing reads that
+/// order - `TAG_GROUPS` in src/lib/constants.ts decides how tags are grouped
+/// and shown - so the list below is chronological and the UI is not.
 enum ListingTag {
   AIRCON
   ENSUITE
@@ -56,6 +61,18 @@ enum ListingTag {
   FEMALE_ONLY
   MALE_ONLY
   ANY_GENDER
+  WATER_HEATER
+  BALCONY
+  GYM_ACCESS
+  POOL_ACCESS
+  PARKING
+  CLEANING_INCLUDED
+  NO_SMOKING
+  HALAL_KITCHEN
+  VISITORS_ALLOWED
+  OWNER_NOT_STAYING
+  NEAR_BUS_STOP
+  NEAR_FOOD
 }
 
 // ---------------------------------------------------------------------------
