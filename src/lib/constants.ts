@@ -131,7 +131,7 @@ export const TAG_LABELS: Record<ListingTag, string> = {
  * sit next to each other and the parser is told they are a pair rather than
  * two unrelated amenities.
  */
-export const OPPOSING_TAGS: [ListingTag, ListingTag][] = [["QUIET", "SOCIAL"]];
+export const OPPOSING_TAGS: [ListingTag, ListingTag][] = [["QUIET", "SOCIAL"], ["MALE_ONLY", "FEMALE_ONLY"]];
 
 /**
  * Grouped for the provider form so 31 checkboxes do not read as a wall, and
@@ -216,8 +216,8 @@ type UngroupedTag = Exclude<
 export const ALL_TAGS: [UngroupedTag] extends [never]
   ? ListingTag[]
   : ["tag missing from TAG_GROUPS:", UngroupedTag] = Object.keys(
-  TAG_LABELS,
-) as ListingTag[];
+    TAG_LABELS,
+  ) as ListingTag[];
 
 export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   SINGLE: "Single room",

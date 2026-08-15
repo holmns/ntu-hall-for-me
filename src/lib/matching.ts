@@ -151,6 +151,7 @@ Rules:
 - "don't mind sharing" or "ok with sharing" is NOT a requirement for SHARED. Leave roomType null.
 - These are opposites, so never return both of a pair anywhere: ${opposites}. Pick the one the seeker asked for and leave the other out entirely.
 - "near campus" / "close to NTU" is a commute preference, not a category. Only set category when the seeker explicitly means NTU hall/on-campus or explicitly means outside campus.
+- If the seeker states his or her gender, add their gender tag and ANY_GENDER tag, if not stated, to mustHaveTags.
 - nuance: short phrase capturing preferences that are not tags, e.g. "quiet, studious, relaxed landlord". Empty string if none.
 - summary: one short sentence restating the request in plain English.
 - Never invent a budget the seeker did not state.`;
@@ -887,7 +888,7 @@ export async function searchListings(
   // A failed rerank keeps the vector order rather than taking down a valid
   // result list; the reasons promise rejects with the same error and the page
   // says so. Attached before the await so the rejection is never unhandled.
-  reasons.catch(() => {});
+  reasons.catch(() => { });
 
   // With an explicit sort the model's order is discarded and SQL's is kept:
   // reordering rooms the seeker asked to see cheapest-first would be the
@@ -898,7 +899,7 @@ export async function searchListings(
   // whatever order the rooms are in, and it costs nothing extra: order and
   // reasons come from one streamed call, and only the order is being dropped.
   if (chips.sort) {
-    order.catch(() => {});
+    order.catch(() => { });
     return { intent, listings, reasons, relaxations };
   }
 
