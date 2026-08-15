@@ -182,7 +182,7 @@ export default async function HomePage() {
                 Recently posted
               </h2>
               <p className="mt-1 text-sm text-ink-soft">
-                The newest rooms, before any ranking is applied.
+                The newest rooms.
               </p>
             </div>
             <Link
@@ -214,7 +214,7 @@ export default async function HomePage() {
             <p className="mt-3 max-w-[540px] text-base leading-[1.55] text-bark-line">
               Post it once, with a fixed tag list and a description in your own
               words. Seekers find it through natural-language search, on a map
-              of the whole west of Singapore.
+              of the whole Singapore.
             </p>
           </div>
           <Link

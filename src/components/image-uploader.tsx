@@ -27,13 +27,13 @@ import {
 type Slot =
   | { kind: "existing"; key: string; id: string; url: string }
   | {
-      kind: "new";
-      key: string;
-      file: File;
-      width: number;
-      height: number;
-      previewUrl: string;
-    };
+    kind: "new";
+    key: string;
+    file: File;
+    width: number;
+    height: number;
+    previewUrl: string;
+  };
 
 function slotSrc(slot: Slot): string {
   return slot.kind === "existing" ? slot.url : slot.previewUrl;
@@ -193,11 +193,10 @@ export function ImageUploader({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className={`flex w-full flex-col items-center justify-center rounded-xl border border-dashed px-6 py-9 text-center transition-colors ${
-            dragging
+          className={`flex w-full flex-col items-center justify-center rounded-xl border border-dashed px-6 py-9 text-center transition-colors ${dragging
               ? "border-brand bg-brand-soft"
               : "border-line-strong bg-surface-muted/60 hover:border-line-strong hover:bg-surface-muted"
-          }`}
+            }`}
         >
           <svg
             viewBox="0 0 24 24"
@@ -215,16 +214,14 @@ export function ImageUploader({
             Drag photos here, or <span className="text-brand-ink">browse</span>
           </span>
           <span className="mt-1 text-xs text-ink-faint">
-            JPG, PNG or WebP. Up to {MAX_IMAGES_PER_LISTING}, resized in your
-            browser before upload.
+            JPG, PNG or WebP. Up to {MAX_IMAGES_PER_LISTING} photos.
           </span>
         </button>
       ) : (
         <>
           <ul
-            className={`grid grid-cols-2 gap-2.5 rounded-xl sm:grid-cols-3 ${
-              dragging ? "outline-2 outline-offset-4 outline-brand" : ""
-            }`}
+            className={`grid grid-cols-2 gap-2.5 rounded-xl sm:grid-cols-3 ${dragging ? "outline-2 outline-offset-4 outline-brand" : ""
+              }`}
           >
             {slots.map((slot, index) => (
               <li
