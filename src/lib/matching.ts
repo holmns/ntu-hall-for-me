@@ -16,6 +16,22 @@ import type { ListingModel as Listing } from "@/generated/prisma/models";
 
 export type TravelMode = "walking" | "transit" | "driving";
 
+/** The seeker's own gender, when they state it. Not a tag - see `SeekerIntent`. */
+export type SeekerGender = "male" | "female";
+
+/** The tag that closes a room to a seeker of each gender. */
+const EXCLUDED_BY_GENDER: Record<SeekerGender, ListingTag> = {
+  male: "FEMALE_ONLY",
+  female: "MALE_ONLY",
+};
+
+/** Tags that say who a room accepts. Handled by `seekerGender`, not as tags. */
+const GENDER_TAGS = new Set<string>([
+  "FEMALE_ONLY",
+  "MALE_ONLY",
+  "ANY_GENDER",
+] satisfies ListingTag[]);
+
 /** Structured form of the seeker's natural-language query (layer 1 output). */
 export type SeekerIntent = {
   minPrice: number | null;
@@ -24,6 +40,16 @@ export type SeekerIntent = {
   niceToHaveTags: ListingTag[];
   category: ListingCategory | null;
   roomType: RoomType | null;
+  /**
+   * Whose gender the seeker stated about themselves, not a tag they asked for.
+   *
+   * Gender is the one constraint the tag lists cannot carry, because it is a
+   * disjunction and `mustHaveTags` is an AND: a man fits a MALE_ONLY room *or*
+   * an ANY_GENDER one *or* one with no gender tag at all, and asking for two of
+   * those at once matched nothing. Kept as its own field so `runFilter` can
+   * express it as the exclusion it really is - see `EXCLUDED_BY_GENDER`.
+   */
+  seekerGender: SeekerGender | null;
   travelMode: TravelMode | null;
   maxCommuteMin: number | null;
   /** Free-text nuance that cannot be expressed as a tag ("chill landlord"). */
@@ -116,6 +142,7 @@ const intentSchema = z.object({
   niceToHaveTags: z.array(z.string()).optional(),
   category: z.enum(["ON_CAMPUS", "OFF_CAMPUS"]).nullable().optional(),
   roomType: z.enum(["SINGLE", "SHARED", "WHOLE_UNIT"]).nullable().optional(),
+  seekerGender: z.enum(["male", "female"]).nullable().optional(),
   travelMode: z.enum(["walking", "transit", "driving"]).nullable().optional(),
   maxCommuteMin: z.number().nullable().optional(),
   nuance: z.string().optional(),
@@ -137,6 +164,7 @@ Return ONLY a JSON object with these keys:
   "niceToHaveTags": string[],
   "category": "ON_CAMPUS" | "OFF_CAMPUS" | null,
   "roomType": "SINGLE" | "SHARED" | "WHOLE_UNIT" | null,
+  "seekerGender": "male" | "female" | null,
   "travelMode": "walking" | "transit" | "driving" | null,
   "maxCommuteMin": number | null,
   "nuance": string,
@@ -151,7 +179,8 @@ Rules:
 - "don't mind sharing" or "ok with sharing" is NOT a requirement for SHARED. Leave roomType null.
 - These are opposites, so never return both of a pair anywhere: ${opposites}. Pick the one the seeker asked for and leave the other out entirely.
 - "near campus" / "close to NTU" is a commute preference, not a category. Only set category when the seeker explicitly means NTU hall/on-campus or explicitly means outside campus.
-- If the seeker states his or her gender, add their gender tag and ANY_GENDER tag, if not stated, to mustHaveTags.
+- seekerGender: set it only when the seeker says which gender THEY are ("I'm a guy", "female student"). Null otherwise, including when they only mention a preference about housemates.
+- Never put FEMALE_ONLY, MALE_ONLY or ANY_GENDER in mustHaveTags or niceToHaveTags. Those describe who a room accepts, and seekerGender already handles it: a male seeker fits male-only rooms AND rooms open to any gender, which no single must-have tag can say.
 - nuance: short phrase capturing preferences that are not tags, e.g. "quiet, studious, relaxed landlord". Empty string if none.
 - summary: one short sentence restating the request in plain English.
 - Never invent a budget the seeker did not state.`;
@@ -169,6 +198,7 @@ function browseAllIntent(): SeekerIntent {
     niceToHaveTags: [],
     category: null,
     roomType: null,
+    seekerGender: null,
     travelMode: null,
     maxCommuteMin: null,
     nuance: "",
@@ -225,10 +255,14 @@ export async function parseSeekerQuery(query: string): Promise<SeekerIntent> {
   });
   const parsed = intentSchema.parse(raw);
   const validTags = new Set<string>(ALL_TAGS);
+  // Gender rides on `seekerGender`, never on a tag list. Dropped here rather
+  // than trusted to the prompt, because a MALE_ONLY must-have would filter out
+  // the 25 rooms open to any gender and an ANY_GENDER one would filter out the
+  // male-only rooms - both readings of the same sentence delete good listings.
   const clean = (tags?: string[]) =>
     (tags ?? [])
       .map((t) => t.toUpperCase().trim())
-      .filter((t): t is ListingTag => validTags.has(t));
+      .filter((t): t is ListingTag => validTags.has(t) && !GENDER_TAGS.has(t));
 
   const { mustHaveTags, niceToHaveTags } = demoteOpposites(
     clean(parsed.mustHaveTags),
@@ -243,6 +277,7 @@ export async function parseSeekerQuery(query: string): Promise<SeekerIntent> {
       niceToHaveTags,
       category: parsed.category ?? null,
       roomType: parsed.roomType ?? null,
+      seekerGender: parsed.seekerGender ?? null,
       travelMode: parsed.travelMode ?? null,
       maxCommuteMin:
         typeof parsed.maxCommuteMin === "number" && parsed.maxCommuteMin > 0
@@ -313,6 +348,14 @@ export function groundIntent(intent: SeekerIntent, query: string): SeekerIntent 
     /on[- ]?campus|off[- ]?campus|\bhalls?\b|\bdorm|\bhostel|\bsublet/.test(q);
   const mentionsTravelMode =
     /walk|bus\b|mrt|transit|public transport|driv|\bcar\b|cycl|\bbike/.test(q);
+  // The seeker's gender excludes rooms, so it needs a word for it in the
+  // query. Nothing else in a housing request implies one, and a model that
+  // infers it from a name or a "girls' hall" mention would be filtering on a
+  // fact the seeker never gave.
+  const mentionsGender =
+    /\b(male|males|female|females|man|men|woman|women|guy|guys|boy|boys|girl|girls|gentleman|lady|ladies|he|him|his|she|her|hers|son|daughter|brother|sister|mr|ms|mrs|miss)\b/.test(
+      q,
+    );
 
   return {
     ...intent,
@@ -320,6 +363,7 @@ export function groundIntent(intent: SeekerIntent, query: string): SeekerIntent 
     maxPrice: mentionsNumber ? intent.maxPrice : null,
     maxCommuteMin: mentionsDuration ? intent.maxCommuteMin : null,
     category: mentionsCategory ? intent.category : null,
+    seekerGender: mentionsGender ? intent.seekerGender : null,
     travelMode: mentionsTravelMode ? intent.travelMode : null,
   };
 }
@@ -395,6 +439,19 @@ async function runFilter(
     // Compared as text[] so the enum does not have to be cast on the way in.
     conditions.push(
       Prisma.sql`"tags"::text[] @> ${intent.mustHaveTags}::text[]`,
+    );
+  }
+  // Gender is an exclusion, not a requirement: a man is turned away by a
+  // FEMALE_ONLY room and welcome in everything else, whether it is tagged
+  // MALE_ONLY, ANY_GENDER or not tagged at all. Absence of a restriction is
+  // not a restriction, so this must not be written as a positive match.
+  //
+  // Never relaxed, unlike the must-have tags below it. The ladder loosens
+  // guesses to avoid an empty page; a room whose provider will not rent to
+  // this seeker is not a match worth showing to fill one.
+  if (intent.seekerGender) {
+    conditions.push(
+      Prisma.sql`NOT ("tags"::text[] @> ARRAY[${EXCLUDED_BY_GENDER[intent.seekerGender]}]::text[])`,
     );
   }
   // Outside the relaxation gate above on purpose. The ladder only ever loosens

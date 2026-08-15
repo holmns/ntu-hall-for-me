@@ -24,6 +24,13 @@ export function IntentPanel({
     chips.push(`Over $${intent.minPrice}`);
   }
   if (intent.category) chips.push(CATEGORY_LABELS[intent.category]);
+  // Phrased as what it does to the results - it hides the rooms closed to this
+  // seeker - rather than as "Male", which reads as a tag they asked for.
+  if (intent.seekerGender) {
+    chips.push(
+      intent.seekerGender === "male" ? "Open to men" : "Open to women",
+    );
+  }
   if (intent.roomType) chips.push(ROOM_TYPE_LABELS[intent.roomType]);
   if (intent.maxCommuteMin != null) {
     chips.push(
