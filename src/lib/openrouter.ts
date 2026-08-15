@@ -1,9 +1,10 @@
 /**
  * Thin OpenRouter client. Server-side only (reads OPENROUTER_API_KEY).
  *
- * Both LLM calls in the matching pipeline go through `chatJson`, which asks for
- * a JSON object back and parses it defensively - a hackathon-grade guard
- * against models that wrap JSON in prose or code fences.
+ * Both LLM calls in the matching pipeline ask for a JSON object back and parse
+ * it defensively - `extractJson` is a hackathon-grade guard against models that
+ * wrap JSON in prose or code fences, and `withJsonRetries` asks again when even
+ * that cannot read the answer.
  *
  * OPENROUTER_API_KEY is required. There is no keyword fallback: a missing key
  * or a failed call surfaces as an error rather than quietly degrading search.
@@ -20,10 +21,13 @@ const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
  *   openai/gpt-5-mini                ~15s
  *
  * Verify a model ID against https://openrouter.ai/api/v1/models before setting
- * OPENROUTER_MODEL - retired IDs 404, and the failure is silent here because
- * the pipeline falls back to keyword matching.
+ * OPENROUTER_MODEL - a retired ID 404s, which is not retried and surfaces as a
+ * failed search.
  */
 const DEFAULT_MODEL = "google/gemini-2.5-flash-lite";
+
+/** Low, because both prompts want a fixed shape rather than invention. */
+const DEFAULT_TEMPERATURE = 0.2;
 
 /** Overridable so a proxy (or a local mock in tests) can stand in. */
 function completionsUrl(): string {
@@ -32,6 +36,72 @@ function completionsUrl(): string {
 }
 
 export class OpenRouterError extends Error {}
+
+/**
+ * The call succeeded but the model's output was not usable JSON.
+ *
+ * Split out from `OpenRouterError` because it is the one failure worth asking
+ * again for: the key is fine, the model is reachable, it just wrote prose or
+ * stopped mid-object. Everything else here (no key, 401, 429, a dead model ID)
+ * fails again identically, so `withJsonRetries` only retries this one.
+ *
+ * Callers that validate the parsed object themselves - a zod schema over the
+ * intent, say - should throw this on a schema miss so it retries the same way.
+ * A JSON object with the wrong shape is the same defect as no object at all.
+ */
+export class UnparseableOutputError extends OpenRouterError {}
+
+/**
+ * Total tries, not extra ones. Three because the failure this covers is a bad
+ * sample rather than a broken request: if the model cannot produce the shape
+ * twice at rising temperature, a fourth ask is latency the seeker pays for
+ * nothing.
+ */
+const MAX_JSON_ATTEMPTS = 3;
+
+/**
+ * Temperature per attempt. The retry is pointless at a fixed low temperature -
+ * same prompt, same near-greedy path, same malformed output - so each retry
+ * samples wider to get off it. The first attempt keeps the 0.2 the prompts were
+ * written against, so normal searches are unaffected.
+ */
+const ATTEMPT_TEMPERATURES = [DEFAULT_TEMPERATURE, 0.5, 0.8];
+
+/**
+ * Runs `run` again while it fails to produce parseable JSON.
+ *
+ * No backoff between attempts. This is not a rate limit or an overloaded
+ * upstream, it is one bad completion, and both call sites sit on the search
+ * critical path where a sleep is a second of blank page for nothing.
+ */
+export async function withJsonRetries<T>(
+  label: string,
+  run: (attempt: { index: number; temperature: number }) => Promise<T>,
+  attempts = MAX_JSON_ATTEMPTS,
+): Promise<T> {
+  let lastError: unknown;
+
+  for (let index = 0; index < attempts; index++) {
+    try {
+      return await run({
+        index,
+        temperature:
+          ATTEMPT_TEMPERATURES[index] ??
+          ATTEMPT_TEMPERATURES[ATTEMPT_TEMPERATURES.length - 1],
+      });
+    } catch (error) {
+      // Anything else - no key, HTTP error, aborted stream - would fail the
+      // same way on a second ask, so it goes straight up.
+      if (!(error instanceof UnparseableOutputError)) throw error;
+      lastError = error;
+      console.warn(
+        `[openrouter] ${label}: unparseable output on attempt ${index + 1}/${attempts}: ${error.message}`,
+      );
+    }
+  }
+
+  throw lastError;
+}
 
 function requireApiKey(): string {
   const apiKey = process.env.OPENROUTER_API_KEY?.trim();
@@ -43,10 +113,15 @@ function requireApiKey(): string {
   return apiKey;
 }
 
-function requestBody(system: string, user: string, maxTokens: number) {
+function requestBody(
+  system: string,
+  user: string,
+  maxTokens: number,
+  temperature: number,
+) {
   return {
     model: process.env.OPENROUTER_MODEL?.trim() || DEFAULT_MODEL,
-    temperature: 0.2,
+    temperature,
     max_tokens: maxTokens,
     response_format: { type: "json_object" as const },
     messages: [
@@ -69,11 +144,13 @@ export async function* chatStream({
   user,
   maxTokens = 1500,
   timeoutMs = 30_000,
+  temperature = DEFAULT_TEMPERATURE,
 }: {
   system: string;
   user: string;
   maxTokens?: number;
   timeoutMs?: number;
+  temperature?: number;
 }): AsyncGenerator<string> {
   const apiKey = requireApiKey();
   const controller = new AbortController();
@@ -89,7 +166,10 @@ export async function* chatStream({
         "HTTP-Referer": "https://ntu-room-finder.local",
         "X-Title": "NTU Room Finder",
       },
-      body: JSON.stringify({ ...requestBody(system, user, maxTokens), stream: true }),
+      body: JSON.stringify({
+        ...requestBody(system, user, maxTokens, temperature),
+        stream: true,
+      }),
     });
 
     if (!res.ok) {
@@ -164,11 +244,13 @@ export async function chatJson<T>({
   user,
   maxTokens = 1500,
   timeoutMs = 20_000,
+  temperature = DEFAULT_TEMPERATURE,
 }: {
   system: string;
   user: string;
   maxTokens?: number;
   timeoutMs?: number;
+  temperature?: number;
 }): Promise<T> {
   const apiKey = requireApiKey();
 
@@ -186,7 +268,7 @@ export async function chatJson<T>({
         "HTTP-Referer": "https://ntu-room-finder.local",
         "X-Title": "NTU Room Finder",
       },
-      body: JSON.stringify(requestBody(system, user, maxTokens)),
+      body: JSON.stringify(requestBody(system, user, maxTokens, temperature)),
     });
 
     if (!res.ok) {
@@ -200,7 +282,11 @@ export async function chatJson<T>({
       choices?: { message?: { content?: string } }[];
     };
     const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new OpenRouterError("OpenRouter returned no content");
+    // An empty completion is the same defect as an unreadable one, and asking
+    // again is the same remedy - so it is retryable, not fatal.
+    if (!content) {
+      throw new UnparseableOutputError("OpenRouter returned no content");
+    }
 
     return extractJson<T>(content);
   } finally {
@@ -229,7 +315,7 @@ export function extractJson<T>(raw: string): T {
       // try the next shape
     }
   }
-  throw new OpenRouterError(
+  throw new UnparseableOutputError(
     `Could not parse JSON from model output: ${text.slice(0, 200)}`,
   );
 }

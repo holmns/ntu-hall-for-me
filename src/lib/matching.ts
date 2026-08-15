@@ -2,7 +2,13 @@ import { z } from "zod";
 
 import { prisma } from "./prisma";
 import { Prisma } from "@/generated/prisma/client";
-import { chatJson, chatStream, extractJson } from "./openrouter";
+import {
+  chatJson,
+  chatStream,
+  extractJson,
+  UnparseableOutputError,
+  withJsonRetries,
+} from "./openrouter";
 import { areaBounds, isInsideArea, type AreaPoint } from "./area-filter";
 import { embedText, toVectorLiteral } from "./embeddings";
 import { ALL_TAGS, OPPOSING_TAGS, TAG_LABELS } from "./constants";
@@ -248,12 +254,29 @@ export async function parseSeekerQuery(query: string): Promise<SeekerIntent> {
     return cached;
   }
 
-  const raw = await chatJson<unknown>({
-    system: buildParseSystemPrompt(),
-    user: trimmed,
-    maxTokens: 600,
-  });
-  const parsed = intentSchema.parse(raw);
+  // The schema check lives inside the retry, not after it: an object of the
+  // wrong shape is the same failure as one that would not parse, and the same
+  // ask again is the fix. Only unparseable output is retried - a missing key or
+  // a dead model ID fails identically the second time, so it goes straight to
+  // the error page rather than costing two more round trips first.
+  const parsed = await withJsonRetries(
+    "parse seeker query",
+    async ({ temperature }) => {
+      const raw = await chatJson<unknown>({
+        system: buildParseSystemPrompt(),
+        user: trimmed,
+        maxTokens: 600,
+        temperature,
+      });
+      const result = intentSchema.safeParse(raw);
+      if (!result.success) {
+        throw new UnparseableOutputError(
+          `intent JSON did not match the schema: ${result.error.message.slice(0, 200)}`,
+        );
+      }
+      return result.data;
+    },
+  );
   const validTags = new Set<string>(ALL_TAGS);
   // Gender rides on `seekerGender`, never on a tag list. Dropped here rather
   // than trusted to the prompt, because a MALE_ONLY must-have would filter out
@@ -688,15 +711,24 @@ function salvageReasons(buffer: string): ReasonEntry[] {
 
 /**
  * The whole buffer when it parsed, the complete entries when it did not.
- * Throws only when nothing at all came back, which is the one case where the
- * page's "reasons unavailable" notice is the honest thing to show.
+ * Throws only when nothing at all came back - which is what makes the call
+ * worth retrying, and failing that is the one case where the page's "reasons
+ * unavailable" notice is the honest thing to show.
  */
 function parseReasons(buffer: string): ReasonEntry[] {
   try {
     return reasonsSchema.parse(extractJson<unknown>(buffer)).reasons;
   } catch (error) {
     const salvaged = salvageReasons(buffer);
-    if (salvaged.length === 0) throw error;
+    if (salvaged.length === 0) {
+      // Typed so `withJsonRetries` asks again. A zod miss on the parsed object
+      // is as much a bad completion as a buffer that was never JSON.
+      throw new UnparseableOutputError(
+        `Could not read any reason from the model output (${buffer.length} chars): ${
+          error instanceof Error ? error.message.slice(0, 200) : String(error)
+        }`,
+      );
+    }
     console.warn(
       `[matching] reasons response was incomplete (${buffer.length} chars); kept ${salvaged.length}`,
     );
@@ -793,53 +825,79 @@ export function rerankAndExplain(
   });
 
   const known = new Set(ids);
+  // Outside the attempt, because the order is settled once for the whole call:
+  // a retry inherits the order the first attempt already committed the page to,
+  // and only re-asks for the explanations. Reasons are keyed by listing id, so
+  // a second attempt's reasons fit the first attempt's order exactly.
+  let orderSettled = false;
+
+  /** True once a complete `"order":[...]` fragment has resolved the promise. */
+  function settleOrderFrom(buffer: string): boolean {
+    const fragment = buffer.match(ORDER_FRAGMENT);
+    if (!fragment) return false;
+    try {
+      const parsed = JSON.parse(`[${fragment[1]}]`) as unknown;
+      const ranked = Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === "string")
+        : [];
+      // Anything the model dropped keeps its vector position at the end,
+      // so a short or invented order cannot lose a room.
+      const seen = new Set(ranked.filter((id) => known.has(id)));
+      resolveOrder([...seen, ...ids.filter((id) => !seen.has(id))]);
+      return true;
+    } catch {
+      // Not valid JSON yet; keep reading.
+      return false;
+    }
+  }
+
+  /**
+   * One streamed call. Settles the order mid-stream and returns the reasons
+   * once the stream ends, throwing `UnparseableOutputError` when the response
+   * carried no readable reason at all - which is what makes it worth re-asking.
+   *
+   * A merely truncated response is not a failure and never retried:
+   * `parseReasons` keeps every complete entry, and paying for a whole second
+   * generation to recover one missing line would be the wrong trade.
+   */
+  const streamOnce = async (temperature: number): Promise<ReasonEntry[]> => {
+    let buffer = "";
+    for await (const delta of chatStream({
+      system: REASON_SYSTEM_PROMPT,
+      user: JSON.stringify({
+        seekerQuery: originalQuery,
+        seekerNuance: intent.nuance,
+        budget: { min: intent.minPrice, max: intent.maxPrice },
+        preferredTravelMode: intent.travelMode ?? "transit",
+        niceToHave: intent.niceToHaveTags,
+        listings: candidatePayload(shortlist, intent),
+      }),
+      // Measured, not estimated: a full REASON_LIMIT shortlist runs 800-860
+      // completion tokens pretty-printed and ~700 compact. The old 1000 left
+      // barely 15% headroom, so an ordinary long-winded run hit the cap, got
+      // cut mid-object and lost every reason. max_tokens is a ceiling and
+      // only generated tokens are billed, so the headroom is free; it is here
+      // to stop a runaway, not to trim a normal response.
+      maxTokens: 1800,
+      temperature,
+    })) {
+      buffer += delta;
+      if (!orderSettled) orderSettled = settleOrderFrom(buffer);
+    }
+    return parseReasons(buffer);
+  };
 
   const reasons = (async (): Promise<ReasonMap> => {
-    let buffer = "";
-    let orderSettled = false;
-
+    let entries: ReasonEntry[];
     try {
-      for await (const delta of chatStream({
-        system: REASON_SYSTEM_PROMPT,
-        user: JSON.stringify({
-          seekerQuery: originalQuery,
-          seekerNuance: intent.nuance,
-          budget: { min: intent.minPrice, max: intent.maxPrice },
-          preferredTravelMode: intent.travelMode ?? "transit",
-          niceToHave: intent.niceToHaveTags,
-          listings: candidatePayload(shortlist, intent),
-        }),
-        // Measured, not estimated: a full REASON_LIMIT shortlist runs 800-860
-        // completion tokens pretty-printed and ~700 compact. The old 1000 left
-        // barely 15% headroom, so an ordinary long-winded run hit the cap, got
-        // cut mid-object and lost every reason. max_tokens is a ceiling and
-        // only generated tokens are billed, so the headroom is free; it is here
-        // to stop a runaway, not to trim a normal response.
-        maxTokens: 1800,
-      })) {
-        buffer += delta;
-
-        if (orderSettled) continue;
-        const fragment = buffer.match(ORDER_FRAGMENT);
-        if (!fragment) continue;
-
-        try {
-          const parsed = JSON.parse(`[${fragment[1]}]`) as unknown;
-          const ranked = Array.isArray(parsed)
-            ? parsed.filter((id): id is string => typeof id === "string")
-            : [];
-          // Anything the model dropped keeps its vector position at the end,
-          // so a short or invented order cannot lose a room.
-          const seen = new Set(ranked.filter((id) => known.has(id)));
-          resolveOrder([...seen, ...ids.filter((id) => !seen.has(id))]);
-        } catch {
-          // Not valid JSON yet; keep reading.
-          continue;
-        }
-        orderSettled = true;
-      }
+      entries = await withJsonRetries(
+        "rerank and explain",
+        ({ temperature }) => streamOnce(temperature),
+      );
     } catch (error) {
       // The order is what the page is blocked on, so it must settle either way.
+      // Once an attempt has settled it the page keeps that order and only the
+      // explanations are lost, which is the smaller failure of the two.
       if (!orderSettled) rejectOrder(error);
       throw error;
     }
@@ -848,7 +906,7 @@ export function rerankAndExplain(
     if (!orderSettled) resolveOrder(ids);
 
     const map: ReasonMap = new Map();
-    for (const entry of parseReasons(buffer)) {
+    for (const entry of entries) {
       const reason = entry.reason.trim();
       // Ignore ids the model invented or repeated. A listing the model skips
       // renders without a reason, which the card already handles.
