@@ -27,10 +27,66 @@ const figtree = Figtree({
   subsets: ["latin"],
 });
 
+/**
+ * The icon is the hive mark in two colourways - black for a light browser
+ * theme, white for a dark one - and every file under `public/icons` is named
+ * for the theme it is *shown in*, not for the colour of its ink. The set the
+ * generator produced is named the other way round, so a file called
+ * `icons/dark/...` is the white artwork.
+ *
+ * `icon.svg` is what nearly everyone gets: one file carrying both colours in a
+ * `prefers-color-scheme` rule, which browsers re-evaluate when the OS theme
+ * flips, so the tab updates without a reload. The PNG pair behind it exists
+ * for browsers that have dark mode but no SVG favicon support (Safari 16 and
+ * older); both members carry an explicit `media`, and the light one is
+ * declared last so a browser that ignores `media` altogether falls back to the
+ * black artwork rather than the white.
+ *
+ * These are declared here rather than as `app/icon.svg` and friends because
+ * the file convention cannot express a `media` attribute. Nothing icon-shaped
+ * should go back into `src/app/` - a `favicon.ico` there would win the
+ * `/favicon.ico` route and quietly re-add its own link tag alongside these.
+ */
 export const metadata: Metadata = {
   title: "NTU Room Finder",
   description:
     "Describe the room you want in plain English and get AI-ranked matches near NTU, Singapore.",
+  manifest: "/site.webmanifest",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/icon.svg", type: "image/svg+xml", sizes: "any" },
+      {
+        url: "/icons/dark/favicon-32x32.png",
+        type: "image/png",
+        sizes: "32x32",
+        media: "(prefers-color-scheme: dark)",
+      },
+      {
+        url: "/icons/dark/favicon-16x16.png",
+        type: "image/png",
+        sizes: "16x16",
+        media: "(prefers-color-scheme: dark)",
+      },
+      {
+        url: "/icons/light/favicon-32x32.png",
+        type: "image/png",
+        sizes: "32x32",
+        media: "(prefers-color-scheme: light)",
+      },
+      {
+        url: "/icons/light/favicon-16x16.png",
+        type: "image/png",
+        sizes: "16x16",
+        media: "(prefers-color-scheme: light)",
+      },
+    ],
+    // Flattened onto the canvas sand, because iOS composites a transparent
+    // home-screen icon onto black and the artwork here is black.
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

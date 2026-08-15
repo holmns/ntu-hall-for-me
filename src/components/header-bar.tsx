@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { HiveMark } from "./hive-mark";
 import { UserMenu } from "./user-menu";
 
 /** The bar's own height, as a margin the hero has to clear before the skin
@@ -116,22 +117,25 @@ export function HeaderBar({
   return (
     <header className={header}>
       <div className={bar}>
-        <Link href="/" className="flex shrink-0 items-center gap-2.5">
-          <span
-            className={`grid h-[30px] w-[30px] place-items-center rounded-full font-display text-[14px] font-extrabold transition-colors duration-200 ${
-              overlay
-                ? "on-photo-shape bg-canvas text-brand-ink"
-                : "bg-brand text-bone"
+        <Link href="/" className="flex shrink-0 items-center gap-2">
+          {/* The mark replaced an "N" on a 30px terracotta disc, and it is not
+              on one: the hive is six stacked rings, and inside a disc it gets
+              ~18px to draw them in, at which size the gaps between the rings
+              close up and it reads as a smudge. Free of the disc it can have
+              the 32px the bar can spare, which is the smallest size the rings
+              survive. The disc's contrast job on the photo passes to
+              `on-photo-mark`. */}
+          <HiveMark
+            className={`h-8 w-8 shrink-0 transition-colors duration-200 ${
+              overlay ? "on-photo-mark text-canvas" : "text-brand"
             }`}
-          >
-            N
-          </span>
+          />
           <span
             className={`font-display text-[16px] font-bold tracking-[-0.02em] transition-colors duration-200 ${
               overlay ? "on-photo-text text-canvas" : "text-ink"
             }`}
           >
-            Room Finder
+            NTU NestMatch
           </span>
         </Link>
 
