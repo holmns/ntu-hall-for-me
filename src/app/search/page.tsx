@@ -417,11 +417,27 @@ async function ReasonFailureNotice({ state }: { state: Promise<ReasonState> }) {
 }
 
 /**
+ * One entry per placeholder card. Enough of them to fill a tall results column
+ * rather than ending in blank sand halfway down it, and a different title width
+ * each, because a column of identical bars reads as a rendering fault.
+ */
+const SKELETON_TITLE_WIDTHS = [
+  "w-3/5",
+  "w-4/5",
+  "w-1/2",
+  "w-2/3",
+  "w-3/4",
+  "w-7/12",
+];
+
+/**
  * Cold load only - every later search keeps the previous results on screen.
  * Mirrors the real two-column shape so the page does not visibly reflow from a
  * single column into a map beside a list the moment the data lands.
  */
 function ResultsSkeleton({ query }: { query: string }) {
+  const searching = Boolean(query.trim());
+
   return (
     // Track sizes must stay in step with ResultsView's grid, or the cold load
     // reflows into a differently-proportioned page the moment the data lands.
@@ -432,29 +448,113 @@ function ResultsSkeleton({ query }: { query: string }) {
           when there is something to read, though: browsing with an empty box
           calls no model, and lighting up for a plain date-ordered list would be
           the glow's only lie. */}
-      {query.trim() && <SearchStarted />}
+      {searching && <SearchStarted />}
 
-      <div className="hidden rounded-xl border border-line bg-surface-muted lg:block lg:h-full" />
-
-      <div className="min-w-0">
-        <div className="card flex items-center gap-3 px-4 py-3">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-brand" />
-          <span className="text-[13px] text-ink-soft">
-            {query.trim()
+      {/* The map column, at the same heights ResultsView gives it at every
+          width - including on a phone, where the real page shows a map and this
+          used to show nothing at all. */}
+      <div className="min-w-0 lg:h-full">
+        {/* Stands in for the Hide map toggle, which only exists below lg. */}
+        <div className="mb-2 h-8 w-24 animate-pulse rounded-lg bg-surface-muted lg:hidden" />
+        <div className="grid h-[320px] place-items-center rounded-xl border border-line bg-surface-muted sm:h-[420px] lg:h-full">
+          {/* The status line lives here rather than over the list: it is the
+              one panel that is the same size before and after the data lands,
+              so saying it here costs the results no vertical space and moves
+              nothing when the map replaces it. Same pill the map itself uses
+              for "Finding rooms in that area...". */}
+          <p className="flex items-center gap-2 rounded-full bg-ink/85 px-3.5 py-1.5 text-[12px] font-medium text-bone shadow-[0_2px_10px_rgba(28,26,23,0.25)]">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+            {searching
               ? "Reading your request and finding rooms..."
               : "Loading rooms..."}
-          </span>
+          </p>
         </div>
-        <div className="mt-3 grid gap-3">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="card p-5">
-              <div className="flex justify-between gap-4">
-                <div className="h-4 w-2/5 animate-pulse rounded bg-surface-muted" />
-                <div className="h-4 w-16 animate-pulse rounded bg-surface-muted" />
-              </div>
-              <div className="mt-3 h-3 w-3/5 animate-pulse rounded bg-surface-muted" />
-              <div className="mt-4 h-9 w-full animate-pulse rounded-lg bg-surface-muted" />
+      </div>
+
+      <div className="min-w-0">
+        {/* What we understood, which only renders when there is a query. */}
+        {searching && (
+          <div className="card animate-pulse overflow-hidden">
+            <div className="border-b border-line bg-surface-muted/60 px-4 py-2.5">
+              <span className="block h-3 w-32 rounded bg-surface-muted" />
             </div>
+            <div className="px-4 py-3.5">
+              <span className="block h-4 w-3/5 rounded bg-surface-muted" />
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {["w-24", "w-20", "w-28"].map((w) => (
+                  <span
+                    key={w}
+                    className={`h-6 ${w} rounded-full bg-surface-muted`}
+                  />
+                ))}
+              </div>
+              {/* The "N rooms passed the hard filters" line, under its rule. */}
+              <div className="mt-3 border-t border-line pt-3">
+                <span className="block h-3 w-40 rounded bg-surface-muted" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* The count heading and the sort pills beside it. */}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <span className="h-4 w-28 animate-pulse rounded bg-surface-muted" />
+          <div className="flex flex-wrap items-center gap-1.5">
+            {["w-10", "w-24", "w-28", "w-28"].map((w) => (
+              <span
+                key={w}
+                className={`h-6 ${w} animate-pulse rounded-full bg-surface-muted`}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-3">
+          {SKELETON_TITLE_WIDTHS.map((width) => (
+            <CardSkeleton key={width} titleWidth={width} reason={searching} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One placeholder room, in the row layout `ListingCard` renders on this page:
+ * cover beside the text, the reason under it once the card is wide enough, tags
+ * across the bottom. The pulse is on the card rather than on each bar so it
+ * reads as one thing arriving, not nine.
+ */
+function CardSkeleton({
+  titleWidth,
+  reason,
+}: {
+  titleWidth: string;
+  /** Reasons are only written when the seeker typed something. */
+  reason: boolean;
+}) {
+  return (
+    <div className="card @container animate-pulse p-4 sm:p-5">
+      {/* Same tracks as the real card, so the cover does not change size or
+          proportion under the photo that replaces it. */}
+      <div className="grid grid-cols-[minmax(104px,min(32%,200px))_minmax(0,1fr)] items-start gap-x-3 gap-y-0 sm:gap-x-4">
+        <div className="aspect-[4/3] w-full rounded-lg border border-line bg-surface-muted @md:row-span-3" />
+
+        <div className="min-w-0">
+          <div className="flex items-start justify-between gap-4">
+            <span className={`mt-0.5 block h-4 ${titleWidth} rounded bg-surface-muted`} />
+            <span className="block h-4 w-14 shrink-0 rounded bg-surface-muted" />
+          </div>
+          <span className="mt-2.5 block h-3 w-4/5 rounded bg-surface-muted" />
+        </div>
+
+        {reason && (
+          <div className="col-span-2 mt-3 h-9 min-w-0 rounded-lg bg-brand-soft/70 @md:col-span-1 @md:col-start-2" />
+        )}
+
+        <div className="col-span-2 mt-3 flex min-w-0 flex-wrap gap-1.5 @md:col-span-1 @md:col-start-2">
+          {["w-20", "w-16", "w-24"].map((w) => (
+            <span key={w} className={`h-6 ${w} rounded-full bg-surface-muted`} />
           ))}
         </div>
       </div>
