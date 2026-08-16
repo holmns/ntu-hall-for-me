@@ -505,9 +505,9 @@ function ResultsSkeleton({ query }: { query: string }) {
         <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <span className="h-4 w-28 animate-pulse rounded bg-surface-muted" />
           <div className="flex flex-wrap items-center gap-1.5">
-            {["w-10", "w-24", "w-28", "w-28"].map((w) => (
+            {["w-10", "w-24", "w-28", "w-28"].map((w, index) => (
               <span
-                key={w}
+                key={`${w}-${index}`}
                 className={`h-6 ${w} animate-pulse rounded-full bg-surface-muted`}
               />
             ))}
