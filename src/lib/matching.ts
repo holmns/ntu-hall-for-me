@@ -103,7 +103,12 @@ export type ChipFilters = {
  * call, so a seeker who just wants the cheapest room gets it without paying
  * for a ranking they are about to override.
  */
-export type SortOrder = "price_asc" | "price_desc" | "newest";
+export type SortOrder =
+  | "price_asc"
+  | "price_desc"
+  | "commute_asc"
+  | "commute_desc"
+  | "newest";
 
 export type ListingWithProvider = Listing & {
   provider: { id: string; name: string | null; image: string | null };
@@ -424,11 +429,28 @@ const MAX_ROWS = 100;
  * where recency is the right order: there is no request to be similar to.
  */
 /** One clause per offered sort. Written out so nothing user-supplied reaches SQL. */
-const SORT_SQL: Record<SortOrder, Prisma.Sql> = {
+const SORT_SQL: Record<Exclude<SortOrder, "commute_asc" | "commute_desc">, Prisma.Sql> = {
   price_asc: Prisma.sql`ORDER BY "price" ASC, "createdAt" DESC`,
   price_desc: Prisma.sql`ORDER BY "price" DESC, "createdAt" DESC`,
   newest: Prisma.sql`ORDER BY "createdAt" DESC`,
 };
+
+/** Each commute ordering uses the same cached mode shown on result cards. */
+const COMMUTE_COLUMN: Record<TravelMode, Prisma.Sql> = {
+  walking: Prisma.sql`"distanceWalkingMin"`,
+  transit: Prisma.sql`"distanceTransitMin"`,
+  driving: Prisma.sql`"distanceDrivingMin"`,
+};
+
+function sortSql(sort: SortOrder, mode: TravelMode): Prisma.Sql {
+  if (sort === "commute_asc") {
+    return Prisma.sql`ORDER BY ${COMMUTE_COLUMN[mode]} ASC, "createdAt" DESC`;
+  }
+  if (sort === "commute_desc") {
+    return Prisma.sql`ORDER BY ${COMMUTE_COLUMN[mode]} DESC, "createdAt" DESC`;
+  }
+  return SORT_SQL[sort];
+}
 
 async function runFilter(
   attempt: FilterAttempt,
@@ -494,15 +516,16 @@ async function runFilter(
   }
 
   // An explicit sort replaces the vector ordering outright rather than
-  // breaking ties within it: someone who asked for cheapest first wants the
-  // cheapest room, not the cheapest of whatever the embedding liked. Price
-  // ties break on recency so the order is stable between identical searches.
+  // breaking ties within it: someone who asked for the shortest commute or
+  // cheapest room wants that across every result, not only among whatever the
+  // embedding liked. Ties break on recency so the order is stable between
+  // identical searches.
   //
   // Otherwise, NULLS LAST is load-bearing: a listing whose embedding failed or
   // has not been backfilled yet still has to appear, just below everything
   // that can be compared. Dropping it would make rows silently vanish.
   const order = chips.sort
-    ? SORT_SQL[chips.sort]
+    ? sortSql(chips.sort, chips.commuteMode ?? intent.travelMode ?? "transit")
     : queryVector
       ? Prisma.sql`ORDER BY "embedding" <=> ${toVectorLiteral(queryVector)}::vector ASC NULLS LAST, "createdAt" DESC`
       : Prisma.sql`ORDER BY "createdAt" DESC`;
@@ -1006,8 +1029,8 @@ export async function searchListings(
   reasons.catch(() => { });
 
   // With an explicit sort the model's order is discarded and SQL's is kept:
-  // reordering rooms the seeker asked to see cheapest-first would be the
-  // control not working. Nothing to wait for either, so the rooms render as
+  // reordering rooms the seeker asked to see by price or commute would make
+  // the control not work. Nothing to wait for either, so the rooms render as
   // soon as the database answers rather than after ~120 streamed tokens.
   //
   // The reasons are still shown. "Why this room matches" is worth reading

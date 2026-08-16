@@ -18,16 +18,23 @@ import { ResultsMap, type MapPin } from "./results-map";
 import { decodeArea, encodeArea, type AreaPoint } from "@/lib/area-filter";
 import type { SortOrder } from "@/lib/matching";
 
-/** The two fields any offered ordering needs, for every room on the page. */
-export type SortKey = { id: string; price: number; createdAt: number };
+/** The fields any offered ordering needs, for every room on the page. */
+export type SortKey = {
+  id: string;
+  price: number;
+  commute: number;
+  createdAt: number;
+};
 
 /**
- * Must match `SORT_SQL` in matching.ts, including the tiebreak, or the order
+ * Must match `sortSql` in matching.ts, including the tiebreak, or the order
  * the reader sees would change under them the moment the server answers.
  */
 const COMPARATORS: Record<SortOrder, (a: SortKey, b: SortKey) => number> = {
   price_asc: (a, b) => a.price - b.price || b.createdAt - a.createdAt,
   price_desc: (a, b) => b.price - a.price || b.createdAt - a.createdAt,
+  commute_asc: (a, b) => a.commute - b.commute || b.createdAt - a.createdAt,
+  commute_desc: (a, b) => b.commute - a.commute || b.createdAt - a.createdAt,
   newest: (a, b) => b.createdAt - a.createdAt,
 };
 

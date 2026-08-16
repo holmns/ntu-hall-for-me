@@ -35,12 +35,16 @@ export function SortSelect({
         { value: "", label: "Best match" },
         { value: "price_asc", label: "Price: low to high" },
         { value: "price_desc", label: "Price: high to low" },
+        { value: "commute_asc", label: "Commute time: low to high" },
+        { value: "commute_desc", label: "Commute time: high to low" },
         { value: "newest", label: "Newest" },
       ]
     : [
         { value: "", label: "Newest" },
         { value: "price_asc", label: "Price: low to high" },
         { value: "price_desc", label: "Price: high to low" },
+        { value: "commute_asc", label: "Commute time: low to high" },
+        { value: "commute_desc", label: "Commute time: high to low" },
       ];
 
   const current = sort ?? "";

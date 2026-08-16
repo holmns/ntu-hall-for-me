@@ -71,7 +71,11 @@ function parseChips(sp: Record<string, string | string[] | undefined>): ChipFilt
   const sort = one("sort");
   return {
     sort:
-      sort === "price_asc" || sort === "price_desc" || sort === "newest"
+      sort === "price_asc" ||
+      sort === "price_desc" ||
+      sort === "commute_asc" ||
+      sort === "commute_desc" ||
+      sort === "newest"
         ? sort
         : null,
     tags: tags.length > 0 ? tags : null,
@@ -288,7 +292,7 @@ async function Results({
       <SearchSettled />
 
       {/* The sort keys are what let the browser reorder without asking again:
-          every room on the page, with the two fields any offered ordering
+          every room on the page, with the fields any offered ordering
           needs. Tiny beside the cards themselves, and it means a sort click
           repaints instead of re-running the pipeline. */}
       <ResultsView
@@ -296,6 +300,7 @@ async function Results({
         sortKeys={listings.map((l) => ({
           id: l.id,
           price: l.price,
+          commute: commuteMinutes(l, mode),
           createdAt: l.createdAt.getTime(),
         }))}
         serverSort={chips.sort ?? null}
