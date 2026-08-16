@@ -187,6 +187,9 @@ ${tagLines}
 
 Rules:
 - mustHaveTags: only things the seeker clearly requires. Be conservative - a wrong must-have removes good listings entirely. When in doubt put it in niceToHaveTags.
+- Tags are extractive, never predictive: add a tag only when the seeker explicitly names that feature or an unmistakable synonym. Do not infer amenities from a room being near campus, its price, room type, or what students commonly expect a room to include.
+- niceToHaveTags: only explicitly stated soft preferences (for example, "prefer", "would like", or "ideally"). Do not put guessed amenities here.
+- Example: "quiet room near campus, under $700, don't mind sharing" has mustHaveTags ["QUIET"] and niceToHaveTags []. It must not add WIFI_INCLUDED, UTILITIES_INCLUDED, FURNISHED, WASHING_MACHINE, or STUDY_DESK.
 - "don't mind sharing" or "ok with sharing" is NOT a requirement for SHARED. Leave roomType null.
 - These are opposites, so never return both of a pair anywhere: ${opposites}. Pick the one the seeker asked for and leave the other out entirely.
 - "near campus" / "close to NTU" is a commute preference, not a category. Only set category when the seeker explicitly means NTU hall/on-campus or explicitly means outside campus.
