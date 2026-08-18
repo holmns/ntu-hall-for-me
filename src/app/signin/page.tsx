@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { GoogleSignInButton } from "@/components/auth-buttons";
+import { HiveMark } from "@/components/hive-mark";
 import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -18,9 +19,7 @@ export default async function SignInPage(props: PageProps<"/signin">) {
   return (
     <div className="mx-auto flex max-w-md flex-col justify-center px-4 py-16 sm:px-6">
       <div className="text-center">
-        <span className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-brand text-lg font-bold text-bone">
-          N
-        </span>
+        <HiveMark className="mx-auto h-11 w-11 text-brand" />
         <h1 className="mt-4 text-2xl font-semibold tracking-tight text-ink">
           Sign in
         </h1>
